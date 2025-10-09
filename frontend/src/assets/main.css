@@ -1,0 +1,28 @@
+:root{
+  --clr:#18191a; 
+  --clr-top-bar:#2c2c2c; 
+  --button-green:#29fd53;
+  --button-green-dark:#2fb349;
+}
+*{
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: 'Poppins', sans-serif;
+}
+
+ul{
+  list-style: none;
+}
+a{
+  text-decoration: none;
+}
+button{
+  cursor: pointer;
+  border: none;
+  outline: none;
+}
+input{
+  outline: none;
+  border: none;
+}
