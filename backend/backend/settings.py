@@ -20,11 +20,26 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     "django_filters",
     'rest_framework',
+    "rest_framework.authtoken",
+    "rest_framework_simplejwt",
     'corsheaders',
     'organizations',
+    'staffUsers.apps.StaffusersConfig',
 ]
 REST_FRAMEWORK = {
-    "DEFAULT_FILTER_BACKENDS": ["django_filters.rest_framework.DjangoFilterBackend"],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
+    "DEFAULT_PERMISSION_CLASSES": [
+        "rest_framework.permissions.AllowAny",
+    ],
+    "DEFAULT_FILTER_BACKENDS": [
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ],
+    "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
+    "PAGE_SIZE": 20,
 }
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',

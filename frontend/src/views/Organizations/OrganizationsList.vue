@@ -234,7 +234,7 @@ export default {
         @mousemove="onTilt"
         @mouseleave="resetTilt"
       >
-        <div class="card-inner">
+        <div class="card-inner" @click="$router.push({ name:'org-detail', params:{ slug: o.slug } })" style="cursor:pointer">
           <div class="card-top">
             <div class="left-meta">
               <!-- мини-иконка банка из API (o.logo) -->
@@ -266,8 +266,11 @@ export default {
           </div>
 
           <div class="card-actions">
-            <button class="btn subtle" @click="openEdit(o)">Редактировать</button>
-            <button class="btn danger ghost" @click="removeOrganization(o)">Удалить</button>
+            <button class="btn subtle" @click.stop="openEdit(o)">Редактировать</button>
+            <button class="btn danger ghost" @click.stop="removeOrganization(o)">Удалить</button>
+            <button class="btn subtle" @click.stop="$router.push({ name:'org-detail', params:{ slug: o.slug } })">
+      Подробнее
+    </button>
           </div>
         </div>
       </article>

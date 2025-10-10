@@ -14,7 +14,7 @@
       </div>
     </header>
 
-    <NavBar :isDark="isDark"/>
+    <NavBar v-if="!$route.meta.hideNav" :isDark="isDark"/>
     <RouterView v-slot="{ Component }">
       <component :is="Component" :is-dark="isDark" />
     </RouterView>

@@ -5,6 +5,9 @@ from rest_framework import viewsets, mixins, filters, permissions, parsers
 from .serializer import CategorySerializer, OrganizationSerializer
 from .models import Category, Organization
 
+from staffUsers.permissions import IsStaffOrReadOnly, CanEditCategory, CanEditOrganization
+from staffUsers.models import AuditEntry, StaffProfile
+
 
 class CategoryViewSet(
     mixins.ListModelMixin, mixins.RetrieveModelMixin,
@@ -14,6 +17,25 @@ class CategoryViewSet(
     serializer_class = CategorySerializer
     lookup_field = 'slug'
     lookup_url_kwarg = "slug"
+    permission_classes = [IsStaffOrReadOnly & CanEditCategory]
+
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        staff = getattr(self.request.user, "staff", None)
+        AuditEntry.objects.create(
+            actor=staff, target=AuditEntry.Target.CAT, category=obj, action="created")
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        staff = getattr(self.request.user, "staff", None)
+        AuditEntry.objects.create(
+            actor=staff, target=AuditEntry.Target.CAT, category=obj, action="updated")
+
+    def perform_destroy(self, instance):
+        staff = getattr(self.request.user, "staff", None)
+        AuditEntry.objects.create(
+            actor=staff, target=AuditEntry.Target.CAT, category=instance, action="deleted")
+        return super().perform_destroy(instance)
 
     def get_queryset(self):
         today = timezone.localdate()
@@ -35,7 +57,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
     serializer_class = OrganizationSerializer
     lookup_field = "slug"
     lookup_url_kwarg = "slug"
-    # permission_classes = [permissions.AllowAny]
+    permission_classes = [IsStaffOrReadOnly & CanEditOrganization]
 
     parser_classes = [parsers.MultiPartParser,
                       parsers.FormParser, parsers.JSONParser]
@@ -48,3 +70,21 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                      "address", "lotus", "phone", "email"]
     ordering_fields = ["time_create", "updated", "name"]
     ordering = ["-time_create"]
+
+    def perform_create(self, serializer):
+        obj = serializer.save()
+        staff = getattr(self.request.user, "staff", None)
+        AuditEntry.objects.create(
+            actor=staff, target=AuditEntry.Target.ORG, org=obj, action="created")
+
+    def perform_update(self, serializer):
+        obj = serializer.save()
+        staff = getattr(self.request.user, "staff", None)
+        AuditEntry.objects.create(
+            actor=staff, target=AuditEntry.Target.ORG, org=obj, action="updated")
+
+    def perform_destroy(self, instance):
+        staff = getattr(self.request.user, "staff", None)
+        AuditEntry.objects.create(
+            actor=staff, target=AuditEntry.Target.ORG, org=instance, action="deleted")
+        return super().perform_destroy(instance)
