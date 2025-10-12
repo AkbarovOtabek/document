@@ -1,12 +1,38 @@
 from django.utils import timezone
-from django.db.models import Count, Q
+from django.db.models import Count, Q,Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, mixins, filters, permissions, parsers
+from rest_framework.decorators import action
+from rest_framework.response import Response
 from .serializer import CategorySerializer, OrganizationSerializer
 from .models import Category, Organization
 
 from staffUsers.permissions import IsStaffOrReadOnly, CanEditCategory, CanEditOrganization
-from staffUsers.models import AuditEntry, StaffProfile
+from staffUsers.models import AuditEntry, StaffProfile,StaffCuratorship
+
+from organizationsStaff.models import OrgUnit
+from organizationsStaff.serializers import OrgUnitTreeSerializer
+
+
+# class OrganizationViewSet(viewsets.ModelViewSet):
+#     # ... как у вас уже есть ...
+
+#     @action(detail=True, methods=["get"], url_path="structure")
+#     def structure(self, request, *args, **kwargs):
+#         org = self.get_object()
+#         qs = (
+#             OrgUnit.objects
+#             .filter(organization=org, parent__isnull=True)
+#             .prefetch_related(
+#                 "children",
+#                 "children__children",        # слегка хелпит, но глубина может быть произвольной
+#                 "employees",
+#             )
+#             .order_by("order", "name")
+#         )
+#         data = OrgUnitTreeSerializer(qs, many=True, context={"request": request}).data
+#         return Response({"organization": org.slug, "units": data})
+
 
 
 class CategoryViewSet(
@@ -70,6 +96,37 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                      "address", "lotus", "phone", "email"]
     ordering_fields = ["time_create", "updated", "name"]
     ordering = ["-time_create"]
+
+    def get_queryset(self):
+        org_links_qs = (
+            StaffCuratorship.objects
+            .select_related("staff", "staff__user")     # чтобы были fio/phone/username
+            .filter(organization__isnull=False)
+        )
+        cat_links_qs = (
+            StaffCuratorship.objects
+            .select_related("staff", "staff__user")
+            .filter(category__isnull=False)
+        )
+        return (
+            Organization.objects
+            .select_related("category")
+            .prefetch_related(
+                Prefetch("curator_links", queryset=org_links_qs, to_attr="curator_links_all_org"),
+                Prefetch("category__curator_links", queryset=cat_links_qs, to_attr="curator_links_all_cat"),
+            )
+        )
+
+    @action(detail=True, methods=["get"], url_path="structure")
+    def structure(self, request, *args, **kwargs):
+        org = self.get_object()
+        roots = (OrgUnit.objects
+                 .filter(organization=org, parent__isnull=True)
+                 .prefetch_related("children", "children__children", "employees")
+                 .order_by("order", "name"))
+        data = OrgUnitTreeSerializer(roots, many=True, context={"request": request}).data
+        return Response({"organization": org.slug, "units": data})
+
 
     def perform_create(self, serializer):
         obj = serializer.save()

@@ -2,15 +2,23 @@ from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import StaffProfile, StaffCuratorship
-from .serializers import StaffProfileSerializer, StaffCuratorshipSerializer
+from .models import StaffProfile, StaffCuratorship,ManagementUnit, Department
+from .serializers import StaffProfileSerializer, StaffCuratorshipSerializer,ManagementUnitSerializer, DepartmentSerializer
+
+
+class ManagementUnitViewSet(viewsets.ModelViewSet):
+    queryset = ManagementUnit.objects.all().order_by("name")
+    serializer_class = ManagementUnitSerializer
+    permission_classes = [permissions.IsAdminUser]  # при желании ослабьте до IsAuthenticated/ReadOnly
+
+
+class DepartmentViewSet(viewsets.ModelViewSet):
+    queryset = Department.objects.select_related("management").all()
+    serializer_class = DepartmentSerializer
+    permission_classes = [permissions.IsAdminUser]
 
 
 class StaffProfileViewSet(viewsets.ModelViewSet):
-    """
-    CRUD сотрудников (профили).
-    GET /api/staff/users/
-    """
     queryset = StaffProfile.objects.select_related("user").all()
     serializer_class = StaffProfileSerializer
     # управлять профилями — только админам (можете ослабить)
@@ -18,7 +26,6 @@ class StaffProfileViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=["get"], permission_classes=[permissions.IsAuthenticated])
     def me(self, request):
-        """Вернёт профиль текущего авторизованного пользователя."""
         try:
             profile = request.user.staff
         except Exception:
@@ -27,9 +34,6 @@ class StaffProfileViewSet(viewsets.ModelViewSet):
 
 
 class StaffCuratorshipViewSet(viewsets.ModelViewSet):
-    """
-    CRUD связей кураторств.
-    """
     queryset = StaffCuratorship.objects.select_related(
         "staff", "organization", "category")
     serializer_class = StaffCuratorshipSerializer

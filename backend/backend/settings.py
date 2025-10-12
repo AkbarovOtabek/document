@@ -25,6 +25,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'organizations',
     'staffUsers.apps.StaffusersConfig',
+    'organizationsStaff',
 ]
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [

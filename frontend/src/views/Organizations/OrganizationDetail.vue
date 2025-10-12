@@ -1,71 +1,197 @@
 <script>
-import axios from 'axios'
-import { API_BASE_URL } from '@/API.js'
+import axios from "axios";
+import { API_BASE_URL } from "@/API.js";
 
-const ORG_DETAIL_URL = `${API_BASE_URL}api/organizations/`
+const ORG_DETAIL_URL = `${API_BASE_URL}api/organizations/`;
 
 export default {
-  name: 'OrganizationDetail',
+  name: "OrganizationDetail",
   props: {
-    slug:   { type: String, required: true },
+    slug: { type: String, required: true },
     isDark: { type: Boolean, default: false },
   },
-  data(){
+  data() {
     return {
       loading: false,
-      error: '',
+      error: "",
       org: null,
-      // 3D
-      rx: 0, ry: 0,
-    }
+    };
   },
-  computed:{
-    themeClass(){ return this.isDark ? 'dark' : '' },
-    cubeStyle(){ return { transform: `rotateX(${this.rx}deg) rotateY(${this.ry}deg)` } },
-    // fallback-аватар (если логотипа нет)
-    avatarText(){
-      if (!this.org || this.org.logo) return ''
-      const initials = (this.org.name||'').split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase()
-      return initials || '🏦'
+  computed: {
+    themeClass() {
+      return this.isDark ? "dark" : "";
+    },
+    avatarText() {
+      if (!this.org || this.org.logo) return "";
+      const initials = (this.org.name || "")
+        .split(/\s+/)
+        .map((w) => w[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase();
+      return initials || "🏦";
     },
   },
-  async mounted(){ await this.fetchDetail() },
-  watch:{ slug: { async handler(){ await this.fetchDetail() } } },
-  methods:{
-    async fetchDetail(){
-      try{
-        this.loading = true; this.error = ''
-        const { data } = await axios.get(`${ORG_DETAIL_URL}${this.slug}/`)
-        this.org = data
-      }catch(e){
-        console.error(e)
-        this.error = 'Не удалось загрузить организацию'
-      }finally{
-        this.loading = false
+  async mounted() {
+    await this.fetchDetail();
+  },
+  watch: {
+    slug: {
+      async handler() {
+        await this.fetchDetail();
+      },
+    },
+  },
+  methods: {
+    async fetchDetail() {
+      try {
+        this.loading = true;
+        this.error = "";
+        const { data } = await axios.get(`${ORG_DETAIL_URL}${this.slug}/`);
+        this.org = data;
+      } catch (e) {
+        console.error(e);
+        this.error = "Не удалось загрузить организацию";
+      } finally {
+        this.loading = false;
       }
     },
-    goBack(){ this.$router.back() },
+    goBack() {
+      this.$router.back();
+    },
+    tel(h) {
+      return h ? `tel:${String(h).replace(/\s+/g, "")}` : "#";
+    },
+    mail(m) {
+      return m ? `mailto:${m}` : "#";
+    },
+    mapLink(addr) {
+      return addr ? `https://maps.google.com/?q=${encodeURIComponent(addr)}` : "#";
+    },
+    abs(url) {
+      if (!url) return "";
+      if (/^https?:\/\//i.test(url)) return url;
+      return `${API_BASE_URL.replace(/\/$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
+    },
+  },
 
-    // 3D — мягкий tilt
-    onTilt(e){
-      const card = e.currentTarget.querySelector('.card-inner')
-      const r = e.currentTarget.getBoundingClientRect()
-      const x = ((e.clientX - r.left) / r.width) * 2 - 1
-      const y = ((e.clientY - r.top) / r.height) * 2 - 1
-      card.style.transform = `rotateX(${-y * 6}deg) rotateY(${x * 6}deg) translateZ(6px)`
-      card.style.boxShadow = `${-x * 14}px ${y * 16}px 40px rgba(0,0,0,.22)`
+  components: {
+    /* Рекурсивный узел структуры */
+    UnitNode: {
+      name: "UnitNode",
+      props: {
+        node: { type: Object, required: true }, // {id,name,type,order,employees[],children[]}
+        level: { type: Number, default: 0 },
+      },
+      data() {
+        return { open: true };
+      }, // всегда открыт по умолчанию
+      computed: {
+        hasChildren() {
+          return Array.isArray(this.node.children) && this.node.children.length > 0;
+        },
+        hasEmployees() {
+          return Array.isArray(this.node.employees) && this.node.employees.length > 0;
+        },
+        indentStyle() {
+          return { paddingLeft: `${Math.min(this.level * 14, 42)}px` };
+        },
+        typeBadge() {
+          const map = {
+            directorate: "Дирекция",
+            management: "Управление",
+            department: "Отдел",
+            section: "Сектор",
+            other: "Другое",
+          };
+          return map[this.node.type] || this.node.type || "Подразделение";
+        },
+      },
+      methods: {
+        toggle() {
+          this.open = !this.open;
+        },
+        initials(name) {
+          const s = String(name || "")
+            .trim()
+            .split(/\s+/)
+            .map((w) => w[0])
+            .join("")
+            .slice(0, 2)
+            .toUpperCase();
+          return s || "👤";
+        },
+        tel(v) {
+          return v ? `tel:${String(v).replace(/\s+/g, "")}` : "#";
+        },
+        mail(v) {
+          return v ? `mailto:${v}` : "#";
+        },
+        phoneOf(e) {
+          return e.phone || e.work_phone || "";
+        },
+        emailOf(e) {
+          return e.email || e.work_email || "";
+        },
+        positionOf(e) {
+          return e.position_display || e.position_title || e.position || "";
+        },
+      },
+      template: `
+        <div class="unit" :style="indentStyle">
+          <div class="unit-row" @click="toggle">
+            <div class="unit-caret" :class="{open}">
+              <span v-if="hasChildren">▸</span><span v-else>•</span>
+            </div>
+            <div class="unit-body">
+              <div class="unit-title">
+                <span class="badge">{{ typeBadge }}</span>
+                <span class="name">{{ node.name }}</span>
+                <span class="meta muted" v-if="hasEmployees">— {{ node.employees.length }} сотрудн.</span>
+                <span class="meta muted" v-if="hasChildren">• {{ node.children.length }} подр.</span>
+              </div>
+            </div>
+          </div>
+
+          <transition name="fade">
+            <div v-if="open" class="unit-content">
+              <!-- Сотрудники -->
+              <ul class="emp-list" v-if="hasEmployees">
+                <li v-for="(e,i) in node.employees" :key="e.id || i" class="emp-item">
+                  <div class="emp-avatar">{{ initials(e.fio || e.full_name) }}</div>
+                  <div class="emp-info">
+                    <div class="emp-name">
+                      {{ e.fio || e.full_name }}
+                      <span v-if="e.is_head" class="tag head">Руководитель</span>
+                    </div>
+                    <div class="emp-sub">
+                      <span class="muted">{{ positionOf(e) || '—' }}</span>
+                      <a v-if="phoneOf(e)" :href="tel(phoneOf(e))" class="link"> · {{ phoneOf(e) }}</a>
+                      <a v-if="emailOf(e)" :href="mail(emailOf(e))" class="link"> · {{ emailOf(e) }}</a>
+                    </div>
+                  </div>
+                </li>
+              </ul>
+
+              <!-- Пустой узел -->
+              <div v-if="!hasEmployees && !hasChildren" class="empty-node">
+                <span class="muted">Нет сотрудников и дочерних подразделений</span>
+              </div>
+
+              <!-- Дети -->
+              <div v-if="hasChildren" class="unit-children">
+                <UnitNode v-for="(child,j) in node.children"
+                          :key="child.id || j"
+                          :node="child"
+                          :level="level+1"/>
+              </div>
+            </div>
+          </transition>
+        </div>
+      `,
     },
-    resetTilt(e){
-      const card = e.currentTarget.querySelector('.card-inner')
-      card.style.transform = ''
-      card.style.boxShadow = ''
-    },
-    // удобные ссылки
-    tel(h){ return h ? `tel:${String(h).replace(/\s+/g,'')}` : '#' },
-    mail(m){ return m ? `mailto:${m}` : '#' },
-    mapLink(addr){ return addr ? `https://maps.google.com/?q=${encodeURIComponent(addr)}` : '#' },
-  }
-}
+  },
+};
 </script>
 
 <template>
@@ -74,32 +200,34 @@ export default {
     <header class="hero">
       <div class="hero-left">
         <button class="btn ghost" @click="goBack">← Назад</button>
-        <h1 class="title">{{ org?.name || 'Организация' }}</h1>
+        <h1 class="title">{{ org?.name || "Организация" }}</h1>
         <div class="subtitle">
-          <span class="pill">{{ org?.category_name || org?.category_slug || 'Категория' }}</span>
+          <span class="pill">{{ org?.category_name || org?.category_slug || "Категория" }}</span>
           <span class="muted">·</span>
-          <span class="muted"><code>{{ org?.name || slug }}</code></span>
+          <span class="muted"
+            ><code>{{ org?.slug || slug }}</code></span
+          >
         </div>
       </div>
     </header>
 
     <p v-if="error" class="error">{{ error }}</p>
 
-    <!-- КОНТЕНТ: только реальные поля API -->
     <section v-if="org" class="grid">
-      <article class="card profile" @mousemove="onTilt" @mouseleave="resetTilt">
+      <!-- Профиль -->
+      <article class="card profile">
         <div class="card-inner">
           <div class="row head">
             <div class="avatar">
-              <img v-if="org.logo" :src="org.logo" alt="" />
+              <img v-if="org.logo" :src="abs(org.logo)" alt="" />
               <span v-else>{{ avatarText }}</span>
             </div>
             <div class="info">
               <div class="name">{{ org.name }}</div>
               <div class="tags">
                 <span class="tag">{{ org.category_name || org.category_slug }}</span>
-                <span class="tag ghost">Создано: {{ org.time_create }}</span>
-                <span class="tag ghost">Обновлено: {{ org.updated }}</span>
+                <span class="tag ghost">ID: {{ org.id }}</span>
+                <span class="tag ghost">Категория ID: {{ org.category }}</span>
               </div>
             </div>
           </div>
@@ -109,157 +237,462 @@ export default {
           <div class="details">
             <div>
               <strong>Адрес</strong>
-              <a :href="mapLink(org.address)" target="_blank" class="muted link">{{ org.address || '—' }}</a>
+              <a :href="mapLink(org.address)" target="_blank" class="muted link">{{
+                org.address || "—"
+              }}</a>
             </div>
             <div>
               <strong>Lotus</strong>
-              <span class="muted">{{ org.lotus || '—' }}</span>
+              <span class="muted">{{ org.lotus || "—" }}</span>
             </div>
             <div>
               <strong>Телефон</strong>
-              <a :href="tel(org.phone)" class="muted link">{{ org.phone || '—' }}</a>
+              <a :href="tel(org.phone)" class="muted link">{{ org.phone || "—" }}</a>
             </div>
             <div>
               <strong>Email</strong>
-              <a :href="mail(org.email)" class="muted link">{{ org.email || '—' }}</a>
+              <a :href="mail(org.email)" class="muted link">{{ org.email || "—" }}</a>
             </div>
             <div>
               <strong>Slug</strong>
               <code>{{ org.slug }}</code>
             </div>
+            <div>
+              <strong>Создано</strong>
+              <span class="muted">{{ org.time_create }}</span>
+            </div>
+            <div>
+              <strong>Обновлено</strong>
+              <span class="muted">{{ org.updated }}</span>
+            </div>
           </div>
         </div>
       </article>
 
-      <!-- Небольшие «заполняющие» карточки — чисто визуально -->
-      <article class="card plain" @mousemove="onTilt" @mouseleave="resetTilt">
+      <!-- Ответственные кураторы/категории -->
+      <article class="card responsibles" v-if="org.responsibles && org.responsibles.length">
         <div class="card-inner">
-          <h3>Документы & интеграции</h3>
-          <p class="muted">Список и статусы интеграций, документы, реквизиты — когда появятся в API, просто отрисуй здесь.</p>
+          <h3 class="block-title">Ответственные</h3>
+          <ul class="resp-list">
+            <li v-for="(r, i) in org.responsibles" :key="i" class="resp-item">
+              <div class="resp-avatar small">{{ (r.fio || r.username || "👤")[0] }}</div>
+              <div class="resp-info">
+                <div class="resp-name">{{ r.fio || r.username }}</div>
+                <div class="resp-sub">
+                  <span class="pill small">{{ r.role }}</span>
+                  <span class="dot">•</span>
+                  <span class="muted">Источник: {{ r.source }}</span>
+                  <span class="dot">•</span>
+                  <span class="muted">{{
+                    r.can_edit ? "может редактировать" : "только чтение"
+                  }}</span>
+                </div>
+                <div class="resp-contacts">
+                  <span class="muted" v-if="r.phone">☎ {{ r.phone }}</span>
+                </div>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </article>
+
+      <!-- Оргструктура -->
+      <article class="card">
+        <div class="card-inner">
+          <div class="structure-head">
+            <h3 class="block-title">Оргструктура</h3>
+            <div class="muted">
+              {{ (org.units_tree && org.units_tree.length) || 0 }} корневых подразделения
+            </div>
+          </div>
+
+          <div v-if="org.units_tree && org.units_tree.length" class="units-tree">
+            <UnitNode v-for="(u, idx) in org.units_tree" :key="u.id || idx" :node="u" :level="0" />
+          </div>
+
+          <p v-else class="muted">Структура не задана.</p>
         </div>
       </article>
     </section>
 
-    <!-- Лоадер-скелет -->
+    <!-- Лоадер -->
     <section v-else-if="loading" class="grid">
-      <article class="card profile">
-        <div class="card-inner skeleton"></div>
-      </article>
-      <article class="card plain">
-        <div class="card-inner skeleton"></div>
-      </article>
+      <article class="card profile"><div class="card-inner skeleton"></div></article>
+      <article class="card responsibles"><div class="card-inner skeleton"></div></article>
+      <article class="card"><div class="card-inner skeleton"></div></article>
     </section>
   </div>
 </template>
 
 <style scoped>
 /* ===== THEME ===== */
-.scene{
-  --bg:#f6f7fb; --panel:#ffffff; --ink:#0f141a; --muted:#6b7280;
-  --primary:#19c46d; --primary-ink:#0ea95b;
-  --line:#e6e8ee; --ring:rgba(25,196,109,.24);
+.scene {
+  --bg: #f6f7fb;
+  --panel: #fff;
+  --ink: #0f141a;
+  --muted: #6b7280;
+  --primary: #19c46d;
+  --primary-ink: #0ea95b;
+  --line: #e6e8ee;
+  --ring: rgba(25, 196, 109, 0.24);
   min-height: calc(100vh - 64px);
-  background:
-    radial-gradient(1200px 600px at 70% -100px, rgba(25,196,109,.10), transparent 60%),
+  background: radial-gradient(1200px 600px at 70% -100px, rgba(25, 196, 109, 0.1), transparent 60%),
     var(--bg);
   color: var(--ink);
 }
-.scene.dark{
-  --bg:#0f1118; --panel:#151b22; --ink:#eaf0f6; --muted:#94a3b8;
-  --primary:#2bdf83; --primary-ink:#17b469;
-  --line:#222a36; --ring:rgba(43,223,131,.18);
-  background:
-    radial-gradient(1300px 700px at 70% -120px, rgba(43,223,131,.10), transparent 60%),
+.scene.dark {
+  --bg: #0f1118;
+  --panel: #151b22;
+  --ink: #eaf0f6;
+  --muted: #94a3b8;
+  --primary: #2bdf83;
+  --primary-ink: #17b469;
+  --line: #222a36;
+  --ring: rgba(43, 223, 131, 0.18);
+  background: radial-gradient(1300px 700px at 70% -120px, rgba(43, 223, 131, 0.1), transparent 60%),
     var(--bg);
 }
 
 /* ===== HERO ===== */
-.hero{
-  display:grid; grid-template-columns: 1.1fr .9fr;
-  gap: 18px; align-items: center; padding: 20px 22px 6px;
+.hero {
+  display: grid;
+  min-height: 300px;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 18px;
+  align-items: center;
+  padding: 20px 22px 6px;
 }
-@media (max-width: 980px){ .hero{ grid-template-columns:1fr; } }
-
-.hero-left .title{ margin: 8px 0 4px;font-size: 32px; line-height:1.1; }
-.subtitle{ display:flex; align-items:center; gap:10px; }
-.pill{ display:inline-flex; align-items:center; height:24px; padding:0 10px; border-radius:999px;
-  background: rgba(25,196,109,.15); color: var(--primary); border:1px solid rgba(25,196,109,.25); font-weight:800; font-size:12px; }
-.muted{ color: var(--muted); }
-.btn{ height:38px; padding:0 12px; border-radius:12px; border:1px solid var(--line); background:transparent; color:var(--ink); font-weight:800; cursor:pointer; }
-
-/* ===== CUBE ===== */
-.cube-wrap{ position:relative; width: clamp(260px, 42vw, 420px); aspect-ratio:1/1; margin-left:auto; perspective:900px; filter: drop-shadow(0 40px 80px rgba(0,0,0,.25)); }
-.cube{ position:absolute; inset:0; transform-style:preserve-3d; animation: idle 8s ease-in-out infinite alternate; }
-@keyframes idle{ 0%{transform: rotateX(-8deg) rotateY(20deg);} 100%{transform: rotateX(4deg) rotateY(-15deg);} }
-.face{
-  position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
-  font-weight:900; letter-spacing:2px; color:#fff; text-shadow:0 2px 18px rgba(0,0,0,.35);
-  border-radius:18px; background:
-    linear-gradient(145deg, rgba(255,255,255,.08), rgba(255,255,255,.02)),
-    linear-gradient(145deg, var(--primary), var(--primary-ink));
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,.12);
+@media (max-width: 980px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
 }
-.f1{ transform: translateZ(90px); } .f2{ transform: rotateY(90deg) translateZ(90px); }
-.f3{ transform: rotateY(180deg) translateZ(90px); } .f4{ transform: rotateY(-90deg) translateZ(90px); }
-.f5{ transform: rotateX(90deg) translateZ(90px); } .f6{ transform: rotateX(-90deg) translateZ(90px); }
-.halo{ position:absolute; inset:auto 0 -16px 0; height:24px; filter: blur(8px);
-  background: radial-gradient(closest-side, rgba(25,196,109,.50), transparent 70%); }
-
-/* ===== GRID ===== */
-.grid{
-  display:grid; grid-template-columns: 1.2fr .8fr;
-  gap: 18px; padding: 10px 22px 24px;
+.title {
+  margin: 8px 0 4px;
+  font-size: 32px;
+  line-height: 1.1;
 }
-@media (max-width: 980px){ .grid{ grid-template-columns: 1fr; } }
-
-/* ===== CARDS ===== */
-.card{ perspective:900px; }
-.card .card-inner{
-  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0)), var(--panel);
+.subtitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(25, 196, 109, 0.15);
+  color: var(--primary);
+  border: 1px solid rgba(25, 196, 109, 0.25);
+  font-weight: 800;
+  font-size: 12px;
+}
+.pill.small {
+  height: 20px;
+  font-size: 11px;
+}
+.muted {
+  color: var(--muted);
+}
+.btn {
+  margin-bottom: 20px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 12px;
   border: 1px solid var(--line);
-  border-radius: 18px; padding: 16px;
-  transform-style: preserve-3d; transition: transform .22s ease, box-shadow .22s ease;
-  box-shadow: 0 18px 38px rgba(0,0,0,.12);
+  background: transparent;
+  color: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+/* ===== GRID & CARDS ===== */
+.grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 18px;
+  padding: 10px 22px 24px;
+}
+@media (max-width: 980px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+.card {
+  perspective: 900px;
+}
+.card .card-inner {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0)),
+    var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 16px;
+  transform-style: preserve-3d;
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.12);
 }
 
 /* Profile */
-.profile .head{ display:flex; gap:14px; align-items:center; margin-bottom:8px; }
-.avatar{
-  width:64px; height:64px; border-radius:16px; border:1px solid var(--line); display:grid; place-items:center;
-  background: linear-gradient(180deg, rgba(25,196,109,.18), rgba(25,196,109,.08));
-  font-weight:900; font-size:20px; color:#fff; text-shadow:0 1px 12px rgba(0,0,0,.25);
+.row.head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 8px;
 }
-.avatar img{ width:100%; height:100%; object-fit:cover; border-radius:16px; }
-.info .name{ font-size:20px; font-weight:900; margin-bottom:4px; }
-.tags{ display:flex; gap:8px; flex-wrap:wrap; }
-.tag{ display:inline-flex; align-items:center; height:24px; padding:0 10px; border-radius:999px; background: rgba(25,196,109,.15); color: var(--primary); border:1px solid rgba(25,196,109,.25); font-weight:800; font-size:12px; }
-.tag.ghost{ background: transparent; color: var(--muted); border-color: var(--line); }
-
-.desc{ margin: 8px 0 10px; color: var(--muted); }
-.details{
-  display:grid; grid-template-columns: repeat(2, minmax(0,1fr));
-  gap: 10px; margin-top: 8px;
+.avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, rgba(25, 196, 109, 0.18), rgba(25, 196, 109, 0.08));
+  font-weight: 900;
+  font-size: 20px;
+  color: #fff;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.25);
 }
-.details .link{ text-decoration:none; }
-.details strong{ display:block; font-size:12px; color: var(--muted); }
-.details span, .details a{ font-size:14px; }
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 16px;
+}
+.info .name {
+  font-size: 20px;
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+.tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(25, 196, 109, 0.15);
+  color: var(--primary);
+  border: 1px solid rgba(25, 196, 109, 0.25);
+  font-weight: 800;
+  font-size: 12px;
+}
+.tag.ghost {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--line);
+}
+.desc {
+  margin: 50px 0 10px;
+  color: var(--muted);
+}
+.details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+.details .link {
+  text-decoration: none;
+}
+.details strong {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+.details span,
+.details a {
+  font-size: 14px;
+}
 
-/* simple filler */
-.plain h3{ margin:0 0 6px; }
-.plain .muted{ font-size:14px; }
+/* Responsibles */
+.block-title {
+  margin: 0 0 10px;
+}
+.resp-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.resp-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: flex-start;
+}
+.resp-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(25, 196, 109, 0.18);
+  color: #fff;
+  font-weight: 900;
+  border: 1px solid var(--line);
+  font-size: 12px;
+}
+.resp-info {
+  display: grid;
+  gap: 4px;
+}
+.resp-name {
+  font-weight: 800;
+}
+.resp-sub {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.dot {
+  color: var(--muted);
+}
+.resp-contacts {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.link {
+  color: var(--ink);
+}
 
-/* skeleton */
-.skeleton{
+/* ===== ORG TREE ===== */
+.structure-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.units-tree {
+  display: grid;
+  gap: 8px;
+}
+.unit {
+  border-left: 2px solid var(--line);
+  padding-left: 8px;
+}
+.unit-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  padding: 8px 10px;
+  border-radius: 12px;
+  transition: 0.15s ease;
+}
+.unit-row:hover {
+  background: rgba(25, 196, 109, 0.08);
+}
+.unit-caret {
+  width: 16px;
+  display: flex;
+  justify-content: center;
+  transform-origin: center;
+  color: var(--muted);
+}
+.unit-caret.open {
+  transform: rotate(90deg);
+}
+.unit-title {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.unit-title .name {
+  font-weight: 800;
+}
+.badge {
+  display: inline-flex;
+  align-items: center;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(25, 196, 109, 0.15);
+  color: var(--primary);
+  border: 1px solid rgba(25, 196, 109, 0.25);
+  font-weight: 800;
+  font-size: 11px;
+}
+.meta {
+  font-size: 12px;
+}
+.unit-content {
+  padding: 6px 6px 10px 22px;
+}
+
+.emp-list {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.emp-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: flex-start;
+}
+.emp-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  background: rgba(25, 196, 109, 0.18);
+  color: #fff;
+  font-weight: 900;
+  border: 1px solid var(--line);
+  font-size: 12px;
+}
+.emp-info {
+  display: grid;
+  gap: 2px;
+}
+.emp-name {
+  font-weight: 800;
+}
+.tag.head {
+  margin-left: 6px;
+  height: 18px;
+  font-size: 10px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: rgba(25, 196, 109, 0.18);
+  color: var(--primary);
+  border: 1px solid rgba(25, 196, 109, 0.24);
+}
+.empty-node {
+  padding: 6px 0;
+}
+
+/* Skeleton */
+.skeleton {
   min-height: 180px;
-  background: linear-gradient(90deg, rgba(0,0,0,.06), rgba(0,0,0,.02), rgba(0,0,0,.06));
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.06));
   background-size: 200% 100%;
   animation: shimmer 1.2s infinite;
 }
-@keyframes shimmer{
-  0%{ background-position: 200% 0; }
-  100%{ background-position: -200% 0; }
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
-/* misc */
-.error{ color:#ef4444; margin: 8px 22px; }
+.error {
+  color: #ef4444;
+  margin: 8px 22px;
+}
 </style>
