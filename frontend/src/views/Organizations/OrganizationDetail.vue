@@ -1,21 +1,19 @@
 <script>
 import axios from "axios";
 import { API_BASE_URL } from "@/API.js";
+import OrgChartFlat from "./OrgChartFlat.vue";
 
 const ORG_DETAIL_URL = `${API_BASE_URL}api/organizations/`;
 
 export default {
   name: "OrganizationDetail",
+  components: { OrgChartFlat },
   props: {
     slug: { type: String, required: true },
     isDark: { type: Boolean, default: false },
   },
   data() {
-    return {
-      loading: false,
-      error: "",
-      org: null,
-    };
+    return { loading: false, error: "", org: null };
   },
   computed: {
     themeClass() {
@@ -56,6 +54,7 @@ export default {
         this.loading = false;
       }
     },
+
     goBack() {
       this.$router.back();
     },
@@ -74,129 +73,11 @@ export default {
       return `${API_BASE_URL.replace(/\/$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
     },
   },
-
-  components: {
-    /* Рекурсивный узел структуры */
-    UnitNode: {
-      name: "UnitNode",
-      props: {
-        node: { type: Object, required: true }, // {id,name,type,order,employees[],children[]}
-        level: { type: Number, default: 0 },
-      },
-      data() {
-        return { open: true };
-      }, // всегда открыт по умолчанию
-      computed: {
-        hasChildren() {
-          return Array.isArray(this.node.children) && this.node.children.length > 0;
-        },
-        hasEmployees() {
-          return Array.isArray(this.node.employees) && this.node.employees.length > 0;
-        },
-        indentStyle() {
-          return { paddingLeft: `${Math.min(this.level * 14, 42)}px` };
-        },
-        typeBadge() {
-          const map = {
-            directorate: "Дирекция",
-            management: "Управление",
-            department: "Отдел",
-            section: "Сектор",
-            other: "Другое",
-          };
-          return map[this.node.type] || this.node.type || "Подразделение";
-        },
-      },
-      methods: {
-        toggle() {
-          this.open = !this.open;
-        },
-        initials(name) {
-          const s = String(name || "")
-            .trim()
-            .split(/\s+/)
-            .map((w) => w[0])
-            .join("")
-            .slice(0, 2)
-            .toUpperCase();
-          return s || "👤";
-        },
-        tel(v) {
-          return v ? `tel:${String(v).replace(/\s+/g, "")}` : "#";
-        },
-        mail(v) {
-          return v ? `mailto:${v}` : "#";
-        },
-        phoneOf(e) {
-          return e.phone || e.work_phone || "";
-        },
-        emailOf(e) {
-          return e.email || e.work_email || "";
-        },
-        positionOf(e) {
-          return e.position_display || e.position_title || e.position || "";
-        },
-      },
-      template: `
-        <div class="unit" :style="indentStyle">
-          <div class="unit-row" @click="toggle">
-            <div class="unit-caret" :class="{open}">
-              <span v-if="hasChildren">▸</span><span v-else>•</span>
-            </div>
-            <div class="unit-body">
-              <div class="unit-title">
-                <span class="badge">{{ typeBadge }}</span>
-                <span class="name">{{ node.name }}</span>
-                <span class="meta muted" v-if="hasEmployees">— {{ node.employees.length }} сотрудн.</span>
-                <span class="meta muted" v-if="hasChildren">• {{ node.children.length }} подр.</span>
-              </div>
-            </div>
-          </div>
-
-          <transition name="fade">
-            <div v-if="open" class="unit-content">
-              <!-- Сотрудники -->
-              <ul class="emp-list" v-if="hasEmployees">
-                <li v-for="(e,i) in node.employees" :key="e.id || i" class="emp-item">
-                  <div class="emp-avatar">{{ initials(e.fio || e.full_name) }}</div>
-                  <div class="emp-info">
-                    <div class="emp-name">
-                      {{ e.fio || e.full_name }}
-                      <span v-if="e.is_head" class="tag head">Руководитель</span>
-                    </div>
-                    <div class="emp-sub">
-                      <span class="muted">{{ positionOf(e) || '—' }}</span>
-                      <a v-if="phoneOf(e)" :href="tel(phoneOf(e))" class="link"> · {{ phoneOf(e) }}</a>
-                      <a v-if="emailOf(e)" :href="mail(emailOf(e))" class="link"> · {{ emailOf(e) }}</a>
-                    </div>
-                  </div>
-                </li>
-              </ul>
-
-              <!-- Пустой узел -->
-              <div v-if="!hasEmployees && !hasChildren" class="empty-node">
-                <span class="muted">Нет сотрудников и дочерних подразделений</span>
-              </div>
-
-              <!-- Дети -->
-              <div v-if="hasChildren" class="unit-children">
-                <UnitNode v-for="(child,j) in node.children"
-                          :key="child.id || j"
-                          :node="child"
-                          :level="level+1"/>
-              </div>
-            </div>
-          </transition>
-        </div>
-      `,
-    },
-  },
 };
 </script>
 
 <template>
   <div class="scene" :class="themeClass">
-    <!-- HERO -->
     <header class="hero">
       <div class="hero-left">
         <button class="btn ghost" @click="goBack">← Назад</button>
@@ -269,7 +150,7 @@ export default {
         </div>
       </article>
 
-      <!-- Ответственные кураторы/категории -->
+      <!-- Ответственные -->
       <article class="card responsibles" v-if="org.responsibles && org.responsibles.length">
         <div class="card-inner">
           <h3 class="block-title">Ответственные</h3>
@@ -297,7 +178,7 @@ export default {
       </article>
 
       <!-- Оргструктура -->
-      <article class="card">
+      <article class="card-width span-full">
         <div class="card-inner">
           <div class="structure-head">
             <h3 class="block-title">Оргструктура</h3>
@@ -305,17 +186,15 @@ export default {
               {{ (org.units_tree && org.units_tree.length) || 0 }} корневых подразделения
             </div>
           </div>
-
           <div v-if="org.units_tree && org.units_tree.length" class="units-tree">
-            <UnitNode v-for="(u, idx) in org.units_tree" :key="u.id || idx" :node="u" :level="0" />
+            <OrgChartFlat v-if="org?.units_tree?.length" :tree="org.units_tree" />
           </div>
-
           <p v-else class="muted">Структура не задана.</p>
         </div>
       </article>
     </section>
 
-    <!-- Лоадер -->
+    <!-- Скелет -->
     <section v-else-if="loading" class="grid">
       <article class="card profile"><div class="card-inner skeleton"></div></article>
       <article class="card responsibles"><div class="card-inner skeleton"></div></article>
@@ -325,7 +204,9 @@ export default {
 </template>
 
 <style scoped>
-/* ===== THEME ===== */
+/* — темы, профиль, карточки, списки ответственых —
+   оставлены без изменений; стили самого узла вынесены в UnitNode.vue */
+
 .scene {
   --bg: #f6f7fb;
   --panel: #fff;
@@ -353,7 +234,6 @@ export default {
     var(--bg);
 }
 
-/* ===== HERO ===== */
 .hero {
   display: grid;
   min-height: 300px;
@@ -408,7 +288,6 @@ export default {
   cursor: pointer;
 }
 
-/* ===== GRID & CARDS ===== */
 .grid {
   display: grid;
   grid-template-columns: 1.2fr 0.8fr;
@@ -423,6 +302,20 @@ export default {
 .card {
   perspective: 900px;
 }
+.card-width {
+  perspective: 1200px;
+  width: 100%;
+}
+.card-width .card-inner {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0)),
+    var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 16px;
+  transform-style: preserve-3d;
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.12);
+}
 .card .card-inner {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0)),
     var(--panel);
@@ -434,7 +327,6 @@ export default {
   box-shadow: 0 18px 38px rgba(0, 0, 0, 0.12);
 }
 
-/* Profile */
 .row.head {
   display: flex;
   gap: 14px;
@@ -510,7 +402,6 @@ export default {
   font-size: 14px;
 }
 
-/* Responsibles */
 .block-title {
   margin: 0 0 10px;
 }
@@ -564,7 +455,6 @@ export default {
   color: var(--ink);
 }
 
-/* ===== ORG TREE ===== */
 .structure-head {
   display: flex;
   justify-content: space-between;
@@ -575,107 +465,7 @@ export default {
   display: grid;
   gap: 8px;
 }
-.unit {
-  border-left: 2px solid var(--line);
-  padding-left: 8px;
-}
-.unit-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  cursor: pointer;
-  user-select: none;
-  padding: 8px 10px;
-  border-radius: 12px;
-  transition: 0.15s ease;
-}
-.unit-row:hover {
-  background: rgba(25, 196, 109, 0.08);
-}
-.unit-caret {
-  width: 16px;
-  display: flex;
-  justify-content: center;
-  transform-origin: center;
-  color: var(--muted);
-}
-.unit-caret.open {
-  transform: rotate(90deg);
-}
-.unit-title {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-.unit-title .name {
-  font-weight: 800;
-}
-.badge {
-  display: inline-flex;
-  align-items: center;
-  height: 20px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: rgba(25, 196, 109, 0.15);
-  color: var(--primary);
-  border: 1px solid rgba(25, 196, 109, 0.25);
-  font-weight: 800;
-  font-size: 11px;
-}
-.meta {
-  font-size: 12px;
-}
-.unit-content {
-  padding: 6px 6px 10px 22px;
-}
 
-.emp-list {
-  list-style: none;
-  margin: 6px 0 0;
-  padding: 0;
-  display: grid;
-  gap: 8px;
-}
-.emp-item {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 10px;
-  align-items: flex-start;
-}
-.emp-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 9px;
-  display: grid;
-  place-items: center;
-  background: rgba(25, 196, 109, 0.18);
-  color: #fff;
-  font-weight: 900;
-  border: 1px solid var(--line);
-  font-size: 12px;
-}
-.emp-info {
-  display: grid;
-  gap: 2px;
-}
-.emp-name {
-  font-weight: 800;
-}
-.tag.head {
-  margin-left: 6px;
-  height: 18px;
-  font-size: 10px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: rgba(25, 196, 109, 0.18);
-  color: var(--primary);
-  border: 1px solid rgba(25, 196, 109, 0.24);
-}
-.empty-node {
-  padding: 6px 0;
-}
-
-/* Skeleton */
 .skeleton {
   min-height: 180px;
   background: linear-gradient(90deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.06));
@@ -689,6 +479,10 @@ export default {
   100% {
     background-position: -200% 0;
   }
+}
+.span-full {
+  grid-column: 1 / -1;
+  margin-bottom: 70px;
 }
 
 .error {
