@@ -3,23 +3,37 @@ export default {
   name: "OrgChartBoard",
   emits: ["select"],
   props: {
-    roots: { type: Array, default: () => [] },
+    root: { type: Object, required: true }, // bitta root daraxti
     showCounters: { type: Boolean, default: true },
   },
   data() {
     return {
-      cols: [], // [{rootId, levels, edges, positions: Map, paths: []}]
+      levels: [], // [[nodes...], ...]
+      edges: [], // [{pId, cId}]
+      positions: new Map(), // id -> {x,y,w,h}
+      paths: [], // SVG path'lar (ota→bola)
+      parentStems: [], // ota → bus (V)
+      busSegments: [], // chap→o‘ng gorizontal chiziq (H)
+      childStems: [],
+      diagPaths: [],
+      wireColor: "#c8ced9",
+      rafId: null, // resize debouncing
     };
   },
   mounted() {
     this.rebuild();
-    window.addEventListener("resize", this.remeasure);
+    window.addEventListener("resize", this.remeasureDebounced);
+    const v = getComputedStyle(this.$el).getPropertyValue("--wire").trim();
+    if (v) this.wireColor = v;
+    setTimeout(this.remeasureDebounced, 0);
+    setTimeout(this.remeasureDebounced, 200);
   },
   beforeUnmount() {
-    window.removeEventListener("resize", this.remeasure);
+    window.removeEventListener("resize", this.remeasureDebounced);
+    if (this.rafId) cancelAnimationFrame(this.rafId);
   },
   watch: {
-    roots: {
+    root: {
       deep: true,
       handler() {
         this.rebuild();
@@ -43,150 +57,162 @@ export default {
     kidsCount(n) {
       return n?.children?.length || 0;
     },
-    levelGap(lvl) {
-      return lvl === 0 ? "24px" : "24px";
+    levelGap() {
+      return "24px";
     },
 
     rebuild() {
-      const cols = [];
-      for (const root of this.roots) {
-        const levels = [];
-        const edges = [];
-        const q = [{ node: root, level: 0, parentId: null }];
+      const R = this.root || {};
 
-        while (q.length) {
-          const { node, level, parentId } = q.shift();
-          (levels[level] ||= []).push(node);
-          if (parentId != null) edges.push({ pId: parentId, cId: node.id });
-          (node.children || []).forEach((ch) =>
-            q.push({ node: ch, level: level + 1, parentId: node.id })
-          );
-        }
+      // генератор стабильных id по пути в дереве (если у узла нет id)
+      const makeId = (path, node) => node.id ?? `${path.join(".")}::${node.name || "unit"}`;
 
-        cols.push({
-          rootId: root.id,
-          levels,
-          edges,
-          positions: new Map(),
-          paths: [], // SVG path strings
+      // универсальный доступ к детям (любой из вариантов)
+      const getChildren = (n) =>
+        n?.children ?? n?.units ?? n?.kids ?? n?.childs ?? n?.subunits ?? [];
+
+      const levels = [],
+        edges = [];
+      const q = [{ node: R, level: 0, parentId: null, path: [0] }];
+
+      while (q.length) {
+        const { node, level, parentId, path } = q.shift();
+        // принудительно создаём id, если отсутствует
+        if (!node.id) node.id = makeId(path, node);
+
+        (levels[level] ||= []).push(node);
+
+        const kids = getChildren(node);
+        kids.forEach((ch, i) => {
+          if (!ch.id) ch.id = makeId([...path, i + 1], ch);
+          edges.push({ pId: node.id, cId: ch.id });
+          q.push({ node: ch, level: level + 1, parentId: node.id, path: [...path, i + 1] });
         });
       }
 
-      this.cols = cols;
-      this.$nextTick(this.remeasure);
+      this.levels = levels;
+      this.edges = edges;
+      this.$nextTick(this.remeasureDebounced);
+    },
+    remeasureDebounced() {
+      if (this.rafId) cancelAnimationFrame(this.rafId);
+      this.rafId = requestAnimationFrame(this.remeasure);
     },
 
     remeasure() {
-      for (const col of this.cols) {
-        const wrap = this.$refs[`wrap-${col.rootId}`];
-        if (!wrap) continue;
-        const rect = wrap.getBoundingClientRect();
+      const wrap = this.$refs.wrap;
+      if (!wrap) return;
+      const rect = wrap.getBoundingClientRect();
+      const pos = new Map();
 
-        col.positions.clear();
-        for (const row of col.levels) {
-          for (const n of row) {
-            const el = this.$refs[`n-${col.rootId}-${n.id}`];
-            const box = Array.isArray(el) ? el[0] : el;
-            if (!box) continue;
-            const r = box.getBoundingClientRect();
-            col.positions.set(n.id, {
-              x: r.left - rect.left,
-              y: r.top - rect.top,
-              w: r.width,
-              h: r.height,
-            });
-          }
+      // Собираем геометрию карточек
+      for (const row of this.levels) {
+        for (const n of row) {
+          const elRef = this.$refs[`n-${n.id}`];
+          const el = Array.isArray(elRef) ? elRef[0] : elRef;
+          if (!el) continue;
+          const r = el.getBoundingClientRect();
+          pos.set(n.id, { x: r.left - rect.left, y: r.top - rect.top, w: r.width, h: r.height });
         }
+      }
 
-        const paths = [];
-        for (const e of col.edges) {
-          const p = col.positions.get(e.pId);
-          const c = col.positions.get(e.cId);
-          if (!p || !c) continue;
+      // Строим диагональные/плавные связи
+      const paths = [];
+      const ARROW_GAP = 10; // отступ от верхнего края ребёнка
+      const CURVE_FACTOR = 0.42; // насколько “плавная” дуга
+      for (const e of this.edges) {
+        const p = pos.get(e.pId);
+        const c = pos.get(e.cId);
+        if (!p || !c) continue;
 
-          const x1 = p.x + p.w / 2,
-            y1 = p.y + p.h;
-          const x2 = c.x + c.w / 2,
-            y2 = c.y;
-          const ARROW_GAP = 8; // 6–10px: подберите под свой дизайн
-          const y2Arrow = y2 - ARROW_GAP;
-          const ymid = y1 + Math.max(16, (y2Arrow - y1) * 0.45);
+        const x1 = p.x + p.w / 2; // низ родителя
+        const y1 = p.y + p.h;
+        const x2 = c.x + c.w / 2; // верх ребёнка (с зазором)
+        const y2 = c.y - ARROW_GAP;
 
-          // вниз -> горизонталь -> вниз (заканчиваем перед карточкой)
-          paths.push(`M ${x1} ${y1} V ${ymid} H ${x2} V ${y2Arrow}`);
-        }
-        col.paths = paths;
+        const dy = Math.max(20, y2 - y1);
+        const cx1 = x1; // контрольные точки для C-сплайна
+        const cy1 = y1 + dy * CURVE_FACTOR;
+        const cx2 = x2;
+        const cy2 = y2 - dy * CURVE_FACTOR;
+
+        paths.push(`M ${x1} ${y1} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${x2} ${y2}`);
+      }
+
+      this.positions = pos;
+      this.diagPaths = paths;
+
+      // SVG: занимаем всю область и задаём viewBox
+      const svg = this.$refs.wires;
+      if (svg) {
+        const w = Math.max(rect.width, wrap.scrollWidth || rect.width);
+        const h = Math.max(rect.height, wrap.scrollHeight || rect.height);
+        svg.setAttribute("width", "100%");
+        svg.setAttribute("height", "100%");
+        svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
       }
     },
 
-    pick(colRootId, node, level) {
-      this.$emit("select", { colRootId, node, level });
+    pick(node, level) {
+      this.$emit("select", { node, level });
     },
   },
 };
 </script>
 
 <template>
-  <div class="board">
-    <!-- одна колонка на корень -->
-    <div class="col" v-for="root in roots" :key="root.id">
-      <div class="col-wrap" :ref="`wrap-${root.id}`">
-        <!-- ЛИНИИ + СТРЕЛКИ -->
-        <svg class="wires" :width="'100%'" :height="'100%'" preserveAspectRatio="none">
-          <defs>
-            <!-- уникальный маркер-стрелка для данной колонки -->
-            <marker
-              :id="`arrow-${root.id}`"
-              markerWidth="10"
-              markerHeight="10"
-              refX="6"
-              refY="3"
-              orient="auto"
-              markerUnits="strokeWidth"
-            >
-              <!-- цвет маркера возьмём как currentColor, чтобы совпадал с линией -->
-              <path
-                v-for="(d, i) in cols.find((c) => c.rootId === root.id)?.paths || []"
-                :key="i"
-                :d="d"
-                :marker-end="`url(#arrow-${root.id})`"
-              />
-            </marker>
-          </defs>
-
-          <!-- линии; stroke берёт currentColor от <g> -->
-          <g fill="none" :stroke="`var(--wire)`" stroke-width="1.5" style="color: var(--wire)">
-            <path
-              v-for="(d, i) in cols.find((c) => c.rootId === root.id)?.paths || []"
-              :key="i"
-              :d="d"
-              :marker-end="`url(#arrow-${root.id})`"
-            />
-          </g>
-        </svg>
-
-        <!-- уровни/карточки -->
-        <div
-          v-for="(row, lvl) in cols.find((c) => c.rootId === root.id)?.levels || []"
-          :key="`lvl-${root.id}-${lvl}`"
-          class="level"
-          :style="{ '--gap': levelGap(lvl) }"
+  <div class="board" ref="wrap">
+    <!-- SVG simlar va o‘qlar -->
+    <svg ref="wires" class="wires" preserveAspectRatio="none">
+      <defs>
+        <!-- Стрелка -->
+        <marker
+          id="arrow-tip"
+          markerWidth="8"
+          markerHeight="8"
+          refX="0"
+          refY="3"
+          orient="auto"
+          markerUnits="strokeWidth"
         >
-          <div
-            v-for="n in row"
-            :key="n.id"
-            class="node"
-            :style="{ '--box': typeInfo(n.type).color }"
-            :ref="`n-${root.id}-${n.id}`"
-            @click="pick(root.id, n, lvl)"
-          >
-            <div class="node-type">{{ typeInfo(n.type).label }}</div>
-            <div class="node-title">{{ n.name }}</div>
-            <div v-if="showCounters" class="node-meta">
-              <span v-if="empCount(n)">{{ empCount(n) }} сотрудн.</span>
-              <span v-if="kidsCount(n)"> · {{ kidsCount(n) }} подр.</span>
-            </div>
-          </div>
+          <!-- Здесь можно задать нужный цвет -->
+          <path d="M0,0 L6,3 L0,6 Z" fill="#404040" stroke="#404040" />
+        </marker>
+      </defs>
+
+      <!-- Диагонали “родитель → ребёнок” -->
+      <g
+        fill="none"
+        :stroke="wireColor"
+        stroke-width="2.2"
+        stroke-linecap="round"
+        stroke-linejoin="round"
+        style="color: var(--wire)"
+      >
+        <path v-for="(d, i) in diagPaths" :key="'edge-' + i" :d="d" marker-end="url(#arrow-tip)" />
+      </g>
+    </svg>
+
+    <!-- Darajalar -->
+    <div
+      v-for="(row, lvl) in levels"
+      :key="'lvl-' + lvl"
+      class="level"
+      :style="{ '--gap': levelGap(lvl) }"
+    >
+      <div
+        v-for="n in row"
+        :key="n.id"
+        class="node"
+        :style="{ '--box': typeInfo(n.type).color }"
+        :ref="'n-' + n.id"
+        @click="pick(n, lvl)"
+      >
+        <div class="node-type">{{ typeInfo(n.type).label }}</div>
+        <div class="node-title">{{ n.name }}</div>
+        <div v-if="showCounters" class="node-meta">
+          <span v-if="empCount(n)">{{ empCount(n) }} сотрудн.</span>
+          <span v-if="kidsCount(n)"> · {{ kidsCount(n) }} подр.</span>
         </div>
       </div>
     </div>
@@ -195,29 +221,25 @@ export default {
 
 <style scoped>
 :root {
+  /* Defaultlar; OrganizationDetail’dan var() larni meros qilib oladi */
+  --panel: #fff;
+  --line: #e6e8ee;
+  --wire: #c8ced9;
+
   --c-dir: #8b5cf6;
   --c-mng: #22c55e;
   --c-dep: #06b6d4;
   --c-sec: #f59e0b;
   --c-oth: #9ca3af;
 }
+
 .board {
-  --wire: #c8ced9; /* цвет линий/стрелок */
-  --line: #e6e8ee;
-  --panel: #fff;
-  --ink: #0f141a;
-  display: flex;
-  justify-content: space-between;
-  gap: 32px;
-  align-items: flex-start;
-}
-.col {
-  flex: 1;
-  min-width: 280px;
-}
-.col-wrap {
   position: relative;
   padding: 8px 8px 24px;
+  border-radius: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  overflow: hidden; /* SVG absolute bo‘lgani uchun silliq ko‘rinsin */
 }
 .wires {
   position: absolute;
@@ -225,25 +247,27 @@ export default {
   pointer-events: none;
   z-index: 0;
 }
+
 .level {
   position: relative;
   z-index: 1;
   display: flex;
   justify-content: center;
   gap: var(--gap, 40px);
-  margin: 28px 0;
+  margin: 40px 0;
+  flex-wrap: wrap; /* uzun qatorda sig‘may qolsa tashlab ketadi */
 }
 
-/* карточка узла */
 .node {
   width: 240px;
   min-height: 76px;
   padding: 12px 14px 14px;
   border-radius: 14px;
-  background: #fff;
+  background: var(--panel);
   box-shadow: 0 10px 22px rgba(0, 0, 0, 0.06);
   transition: transform 0.18s, box-shadow 0.18s, filter 0.18s;
   cursor: pointer;
+  border: 1px solid #eef2f7;
 }
 .node:hover {
   transform: translateY(-2px);
@@ -271,15 +295,5 @@ export default {
   margin-top: 6px;
   font-size: 12px;
   color: #6b7280;
-}
-.wires {
-  position: absolute;
-  inset: 0;
-  pointer-events: none; /* клики идут по карточкам */
-  z-index: 3; /* выше карточек */
-}
-.level {
-  position: relative;
-  z-index: 2; /* ниже svg-проводки */
 }
 </style>

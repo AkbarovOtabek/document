@@ -46,7 +46,16 @@ export default {
         this.loading = true;
         this.error = "";
         const { data } = await axios.get(`${ORG_DETAIL_URL}${this.slug}/`);
-        this.org = data;
+
+        // 🔧 Нормализуем возможные варианты поля со структурой:
+        const rawTree =
+          data.units_tree ?? data.units ?? data.unitsTree ?? data.tree ?? data.structure ?? [];
+
+        // превращаем в массив (если бек вернул один объект)
+        const asArray = Array.isArray(rawTree) ? rawTree : rawTree ? [rawTree] : [];
+
+        // записываем обратно, не меняя остальную разметку/стили
+        this.org = { ...data, units_tree: asArray };
       } catch (e) {
         console.error(e);
         this.error = "Не удалось загрузить организацию";
@@ -54,7 +63,6 @@ export default {
         this.loading = false;
       }
     },
-
     goBack() {
       this.$router.back();
     },
