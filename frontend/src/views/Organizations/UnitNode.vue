@@ -1,19 +1,15 @@
 <script>
 export default {
   name: "UnitNode",
-  emits: ["pick-unit"],
+  emits: ["pick-unit", "create-child", "create-emp"],
   props: {
     node: { type: Object, required: true },
-    wire: { type: String, default: "#5a6b84" }, // цвет стрелок
+    wire: { type: String, default: "#5a6b84" },
     level: { type: Number, default: 0 },
     parentPath: { type: String, default: "" },
   },
   data() {
-    return {
-      paths: [], // [{ d, key }]
-      _ro: null,
-      _mo: null,
-    };
+    return { paths: [], _ro: null, _mo: null };
   },
   computed: {
     children() {
@@ -57,18 +53,17 @@ export default {
       this.$emit("pick-unit", this.node, this.path);
     },
 
-    // коробка непосредственного дочернего UnitNode (без внучек)
     _childBoxOf(cell) {
-      const nodeRoot = cell.querySelector(":scope > .node"); // прямой .node
+      const nodeRoot = cell.querySelector(":scope > .node");
       if (!nodeRoot) return null;
-      const box = nodeRoot.querySelector(":scope > .box"); // его .box
+      const box = nodeRoot.querySelector(":scope > .box");
       return box || null;
     },
 
     computePaths() {
-      const box = this.$refs.box;
-      const kids = this.$refs.kids;
-      const row = this.$refs.row;
+      const box = this.$refs.box,
+        kids = this.$refs.kids,
+        row = this.$refs.row;
       if (!box || !kids || !row) {
         this.paths = [];
         return;
@@ -76,16 +71,13 @@ export default {
 
       const base = kids.getBoundingClientRect();
       const pb = box.getBoundingClientRect();
-
       const startX = pb.left + pb.width / 2 - base.left;
       const startY = pb.bottom - base.top;
 
-      // ВАЖНО: только ПРЯМЫЕ .cell (ни одного внучка)
       let cells = [];
       try {
         cells = Array.from(row.querySelectorAll(":scope > .cell"));
       } catch {
-        // если :scope вдруг недоступен —fallback на children
         cells = Array.from(row.children).filter((el) => el.classList?.contains("cell"));
       }
 
@@ -99,7 +91,6 @@ export default {
         const endX = cb.left + cb.width / 2 - base.left;
         const endY = cb.top - base.top;
 
-        // мягкая кривая только к ребёнку
         const midY = startY + Math.max(14, (endY - startY) * 0.5);
         const c1x = startX,
           c1y = midY;
@@ -110,12 +101,11 @@ export default {
           `M ${startX.toFixed(1)} ${startY.toFixed(1)} ` +
           `C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ` +
           `${c2x.toFixed(1)} ${c2y.toFixed(1)}, ` +
-          `${endX.toFixed(1)} ${(endY - tip).toFixed(1)} ` + // подводим кривую чуть выше цели
+          `${endX.toFixed(1)} ${(endY - tip).toFixed(1)} ` +
           `L ${endX.toFixed(1)} ${endY.toFixed(1)}`;
 
         results.push({ d, key: idx });
       }
-
       this.paths = results;
     },
   },
@@ -124,13 +114,37 @@ export default {
 
 <template>
   <div class="node">
-    <!-- Карточка подразделения -->
-    <div ref="box" class="box" @click.stop="pickUnit" :title="unitType ? 'Тип: ' + unitType : ''">
+    <!-- Карточка -->
+    <div
+      ref="box"
+      class="box"
+      @click.stop="pickUnit"
+      @mousedown.stop
+      :title="unitType ? 'Тип: ' + unitType : ''"
+    >
       <div class="name">{{ node.name || "Без названия" }}</div>
       <div v-if="unitType" class="type">{{ unitType }}</div>
+
+      <!-- Встроенные кнопки (внутри карточки) -->
+      <div class="inner-actions">
+        <button
+          class="pill"
+          @mousedown.stop.prevent="$emit('create-emp', node)"
+          @click.stop.prevent="$emit('create-emp', node)"
+        >
+          👤 Сотрудник
+        </button>
+        <button
+          class="pill ghost"
+          @mousedown.stop.prevent="$emit('create-child', node)"
+          @click.stop.prevent="$emit('create-child', node)"
+        >
+          ➕ Подразделение
+        </button>
+      </div>
     </div>
 
-    <!-- Дочерние + SVG-стрелки (только к непосредственным детям) -->
+    <!-- Дочерние узлы -->
     <div v-if="children.length" ref="kids" class="kids">
       <svg class="wires" :style="{ color: wire }" preserveAspectRatio="none">
         <defs>
@@ -155,6 +169,8 @@ export default {
             :level="level + 1"
             :parentPath="path"
             @pick-unit="$emit('pick-unit', $event, path)"
+            @create-child="$emit('create-child', $event)"
+            @create-emp="$emit('create-emp', $event)"
           />
         </div>
       </div>
@@ -164,6 +180,7 @@ export default {
 
 <style scoped>
 .node {
+  position: relative;
   display: grid;
   justify-items: center;
   overflow: visible;
@@ -171,24 +188,25 @@ export default {
 
 /* Карточка */
 .box {
+  position: relative;
   background: #fff;
-  border: 1px solid #c9d1e1;
-  border-radius: 12px;
-  padding: 10px 14px;
-  min-width: 240px;
+  border: 2px solid #c9d1e1;
+  border-radius: 14px;
+  padding: 14px 16px 18px;
+  min-width: 260px;
   text-align: center;
   cursor: pointer;
   transition: border-color 0.15s ease, transform 0.12s ease, box-shadow 0.2s ease;
   box-shadow: 0 8px 18px rgba(19, 31, 55, 0.06);
 }
 .box:hover {
-  border-color: rgba(25, 196, 109, 0.5);
+  border-color: rgba(25, 196, 109, 0.55);
   transform: translateY(-1px);
   box-shadow: 0 12px 26px rgba(19, 31, 55, 0.08);
 }
 .name {
-  font-size: 15px;
-  font-weight: 800;
+  font-size: 16px;
+  font-weight: 900;
   letter-spacing: 0.2px;
 }
 .type {
@@ -197,12 +215,54 @@ export default {
   color: #7b8497;
 }
 
-/* Дочерние контейнеры */
+/* Кнопки внутри карточки */
+.inner-actions {
+  margin-top: 10px;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+.box:hover .inner-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* Кнопки-пилюли */
+.pill {
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  border: 1px solid rgba(25, 196, 109, 0.35);
+  background: rgba(25, 196, 109, 0.1);
+  color: #0d8f56;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.pill:hover {
+  background: rgba(25, 196, 109, 0.18);
+}
+.pill.ghost {
+  border-color: #c9d1e1;
+  background: #f6f8fc;
+  color: #1b2739;
+}
+.pill.ghost:hover {
+  background: #eef2f9;
+}
+
+/* Дети и стрелки */
 .kids {
   position: relative;
   width: 100%;
 }
 .row {
+  position: relative;
+  z-index: 1;
   display: grid;
   grid-auto-flow: column;
   grid-auto-columns: max-content;
@@ -217,13 +277,14 @@ export default {
   overflow: visible;
 }
 
-/* SVG-стрелки */
+/* SVG стрелки */
 .wires {
   position: absolute;
   inset: 0;
   width: 100%;
   height: 100%;
   pointer-events: none;
+  z-index: 0;
 }
 .wire-path {
   fill: none;
