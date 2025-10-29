@@ -1,6 +1,7 @@
 <script>
+import axios from "axios";
 import OrgChartBoard from "./OrgChartBoard.vue";
-
+import { API_BASE_URL } from "@/API.js";
 function deepClone(v) {
   try {
     return JSON.parse(JSON.stringify(v));
@@ -15,11 +16,13 @@ export default {
   components: { OrgChartBoard },
   props: {
     tree: { type: Array, required: true, default: () => [] },
+    orgId:  { type: Number, required: true }
   },
+   emits: ["saved"],  
   data() {
     return {
       localTree: deepClone(this.tree),
-
+loadingSubmit: false,
       // правая панель
       selections: [],
       query: "",
@@ -47,22 +50,16 @@ export default {
       return [{ wire: "#d84c3f" }, { wire: "#2962ff" }];
     },
     filtered() {
-      if (!this.query) return this.selections;
-      const q = this.query.toLowerCase();
-      return this.selections.filter((s) => {
-        const unitText = `${s.unit?.name || ""} ${s.unit?.type || ""} ${
-          s.path || ""
-        }`.toLowerCase();
-        const empsText = (s.employees || [])
-          .map((e) =>
-            `${e.fio || e.name || ""} ${e.position || ""} ${e.phone || ""} ${
-              e.email || ""
-            }`.toLowerCase()
-          )
-          .join(" ");
-        return unitText.includes(q) || empsText.includes(q);
-      });
-    },
+  if (!this.query) return this.selections;
+  const q = this.query.toLowerCase();
+  return this.selections.filter((s) => {
+    const unitText = `${s.unit?.name || ""} ${s.unit?.type || ""} ${s.path || ""}`.toLowerCase();
+    const empsText = (s.employees || [])
+      .map((e) => `${e.fio || ""} ${e.position_display || ""} ${e.phone || ""} ${e.email || ""}`.toLowerCase())
+      .join(" ");
+    return unitText.includes(q) || empsText.includes(q);
+  });
+},
     modalTitle() {
       if (this.modalType === "root") return "Новое корневое подразделение";
       if (this.modalType === "unit") return "Новое дочернее подразделение";
@@ -80,6 +77,18 @@ export default {
     window.removeEventListener("keydown", this.onKeydown);
   },
   methods: {
+    async apiCreateUnit(payload) {
+      // payload: { organization, name, type, order?, parent? }
+      const url = `${API_BASE_URL}api/organizations-staff/units/`;
+      const { data } = await axios.post(url, payload);
+      return data; // {id, organization, parent, name, type, order}
+    },
+    async apiCreateEmployee(payload) {
+      // payload: { organization, unit, full_name, position_title, work_phone, email, lotus?, is_head?, order? }
+      const url = `${API_BASE_URL}api/organizations-staff/employees/`;
+      const { data } = await axios.post(url, payload);
+      return data; // {id, ...}
+    },
     // ==== правая панель ====
     idxByUnit(u) {
       const id = u?.id ?? u?.name;
@@ -131,44 +140,56 @@ export default {
     },
 
     // ==== submit/close модалки ====
-    submitModal() {
-      if (this.modalType === "root") {
-        const name = (this.form.name || "").trim();
-        if (!name) return;
-        this.localTree.push({
-          id: _uid++,
-          name,
-          type: this.form.type || "department",
-          order: 0,
-          children: [],
-          employees: [],
-        });
-      } else if (this.modalType === "unit" && this.targetNode) {
-        const name = (this.form.name || "").trim();
-        if (!name) return;
-        if (!Array.isArray(this.targetNode.children)) this.targetNode.children = [];
-        this.targetNode.children.push({
-          id: _uid++,
-          name,
-          type: this.form.type || "department",
-          order: 0,
-          children: [],
-          employees: [],
-        });
-      } else if (this.modalType === "employee" && this.targetNode) {
-        const fio = (this.form.fio || "").trim();
-        if (!fio) return;
-        if (!Array.isArray(this.targetNode.employees)) this.targetNode.employees = [];
-        this.targetNode.employees.push({
-          id: _uid++,
-          fio,
-          position: this.form.position || "",
-          phone: this.form.phone || "",
-          email: this.form.email || "",
-        });
-      }
-      this.closeModal();
-    },
+    async submitModal() {
+  if (this.loadingSubmit) return;
+  this.loadingSubmit = true;
+  try {
+    if (this.modalType === "root") {
+      const name = (this.form.name || "").trim();
+      if (!name) return;
+      await this.apiCreateUnit({
+        organization: this.orgId,
+        name,
+        type: this.form.type || "department",
+        order: 0
+      });
+
+    } else if (this.modalType === "unit" && this.targetNode) {
+      const name = (this.form.name || "").trim();
+      if (!name) return;
+      await this.apiCreateUnit({
+        organization: this.orgId,
+        parent: this.targetNode.id,
+        name,
+        type: this.form.type || "department",
+        order: 0
+      });
+
+    } else if (this.modalType === "employee" && this.targetNode) {
+      const fio = (this.form.fio || "").trim();
+      if (!fio) return;
+      await this.apiCreateEmployee({
+        organization: this.orgId,
+        unit: this.targetNode.id,
+        full_name: fio,
+        position_title: this.form.position || "",
+        work_phone: this.form.phone || "",
+        email: this.form.email || "",
+        is_head: false,
+        order: 0
+      });
+    }
+
+    this.closeModal();
+    this.$emit("saved"); // пусть родитель перезагрузит дерево
+
+  } catch (e) {
+    console.error(e);
+    alert("Не удалось сохранить. Проверьте введённые данные и права.");
+  } finally {
+    this.loadingSubmit = false;
+  }
+},
     closeModal() {
       this.showModal = false;
       this.targetNode = null;
@@ -214,51 +235,51 @@ export default {
 
     <!-- ПРАВАЯ: выбранные -->
     <aside class="right">
-      <div class="panel-head">
-        <h3>Выбранные</h3>
-        <div class="tools">
-          <input v-model="query" type="search" class="search" placeholder="Поиск…" />
-          <button class="btn" @click="clearAll" :disabled="!selections.length">Очистить</button>
+  <div class="panel-head">
+    <h3>Выбранные</h3>
+    <div class="tools">
+      <input v-model="query" type="search" class="search" placeholder="Поиск…" />
+      <button class="btn" @click="clearAll" :disabled="!selections.length">Очистить</button>
+    </div>
+  </div>
+
+  <div v-if="!selections.length" class="empty muted">
+    Нажмите на подразделение слева — карточка и его сотрудники появятся здесь.
+  </div>
+
+  <div v-else class="units">
+    <div v-for="(s, i) in filtered" :key="s.unit?.id || i" class="unit-card">
+      <div class="unit-head">
+        <div>
+          <div class="unit-title">
+            <strong>{{ s.unit?.name || "Подразделение" }}</strong>
+            <span v-if="s.unit?.type" class="tag">{{ s.unit.type }}</span>
+          </div>
+          <div v-if="s.path" class="path">{{ s.path }}</div>
+        </div>
+        <button class="x" @click="removeUnit(i)" title="Убрать подразделение">×</button>
+      </div>
+
+      <div v-if="s.employees?.length" class="emp-list">
+        <div v-for="(e, j) in s.employees" :key="e.id || j" class="emp-row">
+          <div class="avatar">{{ (e.fio || "👤").slice(0, 1) }}</div>
+          <div class="emp-body">
+            <div class="emp-title">
+              <b>{{ e.fio }}</b>
+              <span v-if="e.position_display" class="muted"> · {{ e.position_display }}</span>
+            </div>
+            <div class="emp-contacts">
+              <a v-if="e.phone" :href="tel(e.phone)" class="chip">☎ {{ e.phone }}</a>
+              <a v-if="e.email" :href="mail(e.email)" class="chip">✉ {{ e.email }}</a>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div v-if="!selections.length" class="empty muted">
-        Нажмите на подразделение слева — карточка и его сотрудники появятся здесь.
-      </div>
-
-      <div v-else class="units">
-        <div v-for="(s, i) in filtered" :key="s.unit?.id || i" class="unit-card">
-          <div class="unit-head">
-            <div>
-              <div class="unit-title">
-                <strong>{{ s.unit?.name || "Подразделение" }}</strong>
-                <span v-if="s.unit?.type" class="tag">{{ s.unit.type }}</span>
-              </div>
-              <div v-if="s.path" class="path">{{ s.path }}</div>
-            </div>
-            <button class="x" @click="removeUnit(i)" title="Убрать подразделение">×</button>
-          </div>
-
-          <div v-if="s.employees?.length" class="emp-list">
-            <div v-for="(e, j) in s.employees" :key="e.id || j" class="emp-row">
-              <div class="avatar">{{ (e.fio || e.name || "👤").slice(0, 1) }}</div>
-              <div class="emp-body">
-                <div class="emp-title">
-                  <b>{{ e.fio || e.name }}</b
-                  ><span v-if="e.position" class="muted"> · {{ e.position }}</span>
-                </div>
-                <div class="emp-contacts">
-                  <a v-if="e.phone" :href="tel(e.phone)" class="chip">☎ {{ e.phone }}</a>
-                  <a v-if="e.email" :href="mail(e.email)" class="chip">✉ {{ e.email }}</a>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div v-else class="muted small">Сотрудников нет для отображения.</div>
-        </div>
-      </div>
-    </aside>
+      <div v-else class="muted small">Сотрудников нет для отображения.</div>
+    </div>
+  </div>
+</aside>
 
     <!-- ==== МОДАЛКА (inline, без runtime-compiler) ==== -->
     <div v-if="showModal" class="m-ov" @click="onModalBg">
@@ -319,9 +340,12 @@ export default {
         </div>
 
         <footer class="m-foot">
-          <button class="btn ghost" @click="closeModal">Отмена</button>
-          <button class="btn" @click="submitModal">{{ modalSubmitText }}</button>
-        </footer>
+  <button class="btn ghost" @click="closeModal" :disabled="loadingSubmit">Отмена</button>
+  <button class="btn" @click="submitModal" :disabled="loadingSubmit">
+    <span v-if="loadingSubmit">Сохранение…</span>
+    <span v-else>{{ modalSubmitText }}</span>
+  </button>
+</footer>
       </div>
     </div>
   </div>

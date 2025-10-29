@@ -1,4 +1,6 @@
 <script>
+let _markerSeq = 1;
+
 export default {
   name: "UnitNode",
   emits: ["pick-unit", "create-child", "create-emp"],
@@ -9,7 +11,13 @@ export default {
     parentPath: { type: String, default: "" },
   },
   data() {
-    return { paths: [], _ro: null, _mo: null };
+    return {
+      paths: [],
+      _ro: null,
+      _mo: null,
+      markerId: `arrowHead-${_markerSeq++}`,
+      _raf: null,
+    };
   },
   computed: {
     children() {
@@ -27,39 +35,44 @@ export default {
     node: {
       deep: true,
       handler() {
-        this.$nextTick(this.computePaths);
+        this._debouncedCompute();
       },
     },
   },
   mounted() {
     this.$nextTick(() => {
-      setTimeout(this.computePaths, 0);
-      if (window.ResizeObserver) {
-        this._ro = new ResizeObserver(this.computePaths);
+      this._debouncedCompute();
+      if (window.ResizeObserver && this.$refs.kids) {
+        this._ro = new ResizeObserver(() => this._debouncedCompute());
         this._ro.observe(this.$refs.kids);
       }
-      this._mo = new MutationObserver(this.computePaths);
-      this._mo.observe(this.$refs.row, { childList: true, subtree: true });
-      window.addEventListener("resize", this.computePaths);
+      if (this.$refs.row) {
+        this._mo = new MutationObserver(() => this._debouncedCompute());
+        this._mo.observe(this.$refs.row, { childList: true, subtree: true });
+      }
+      window.addEventListener("resize", this._debouncedCompute);
     });
   },
   beforeUnmount() {
     if (this._ro) this._ro.disconnect();
     if (this._mo) this._mo.disconnect();
-    window.removeEventListener("resize", this.computePaths);
+    window.removeEventListener("resize", this._debouncedCompute);
+    if (this._raf) cancelAnimationFrame(this._raf);
   },
   methods: {
     pickUnit() {
       this.$emit("pick-unit", this.node, this.path);
     },
-
     _childBoxOf(cell) {
       const nodeRoot = cell.querySelector(":scope > .node");
       if (!nodeRoot) return null;
       const box = nodeRoot.querySelector(":scope > .box");
       return box || null;
     },
-
+    _debouncedCompute() {
+      if (this._raf) cancelAnimationFrame(this._raf);
+      this._raf = requestAnimationFrame(() => this.computePaths());
+    },
     computePaths() {
       const box = this.$refs.box,
         kids = this.$refs.kids,
@@ -92,15 +105,11 @@ export default {
         const endY = cb.top - base.top;
 
         const midY = startY + Math.max(14, (endY - startY) * 0.5);
-        const c1x = startX,
-          c1y = midY;
-        const c2x = endX,
-          c2y = midY;
         const tip = 11;
         const d =
           `M ${startX.toFixed(1)} ${startY.toFixed(1)} ` +
-          `C ${c1x.toFixed(1)} ${c1y.toFixed(1)}, ` +
-          `${c2x.toFixed(1)} ${c2y.toFixed(1)}, ` +
+          `C ${startX.toFixed(1)} ${midY.toFixed(1)}, ` +
+          `${endX.toFixed(1)} ${midY.toFixed(1)}, ` +
           `${endX.toFixed(1)} ${(endY - tip).toFixed(1)} ` +
           `L ${endX.toFixed(1)} ${endY.toFixed(1)}`;
 
@@ -125,22 +134,9 @@ export default {
       <div class="name">{{ node.name || "Без названия" }}</div>
       <div v-if="unitType" class="type">{{ unitType }}</div>
 
-      <!-- Встроенные кнопки (внутри карточки) -->
       <div class="inner-actions">
-        <button
-          class="pill"
-          @mousedown.stop.prevent="$emit('create-emp', node)"
-          @click.stop.prevent="$emit('create-emp', node)"
-        >
-          👤 Сотрудник
-        </button>
-        <button
-          class="pill ghost"
-          @mousedown.stop.prevent="$emit('create-child', node)"
-          @click.stop.prevent="$emit('create-child', node)"
-        >
-          ➕ Подразделение
-        </button>
+        <button class="pill" @mousedown.stop.prevent="$emit('create-emp', node)" @click.stop.prevent="$emit('create-emp', node)">👤 Сотрудник</button>
+        <button class="pill ghost" @mousedown.stop.prevent="$emit('create-child', node)" @click.stop.prevent="$emit('create-child', node)">➕ Подразделение</button>
       </div>
     </div>
 
@@ -148,17 +144,11 @@ export default {
     <div v-if="children.length" ref="kids" class="kids">
       <svg class="wires" :style="{ color: wire }" preserveAspectRatio="none">
         <defs>
-          <marker id="arrowHead" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
+          <marker :id="markerId" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto">
             <path d="M0,0 L6,3 L0,6 z" fill="currentColor" />
           </marker>
         </defs>
-        <path
-          v-for="p in paths"
-          :key="p.key"
-          :d="p.d"
-          class="wire-path"
-          marker-end="url(#arrowHead)"
-        />
+        <path v-for="p in paths" :key="p.key" :d="p.d" class="wire-path" :marker-end="`url(#${markerId})`" />
       </svg>
 
       <div ref="row" class="row">

@@ -187,7 +187,13 @@ export default {
             </div>
           </div>
           <div v-if="org.units_tree && org.units_tree.length" class="units-tree">
-            <OrgChartFlat v-if="org?.units_tree?.length" :tree="org.units_tree" />
+           <OrgChartFlat
+              v-if="org?.units_tree?.length"
+              :key="org.updated || org.id" 
+              :tree="org.units_tree"
+              :org-id="org.id"
+              @saved="fetchDetail"
+            />
           </div>
           <p v-else class="muted">Структура не задана.</p>
         </div>
