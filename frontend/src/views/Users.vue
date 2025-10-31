@@ -713,7 +713,7 @@ export default {
 
 <style scoped>
 .scene { --line:#e5e7eb; --panel:#fff; --ink:#0f141a; --muted:#6b7280; }
-.head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
+.head { margin-top: 80px; display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:12px; }
 .tools { display:flex; gap:8px; align-items:center; }
 .inp { height:36px; padding:0 10px; border:1px solid var(--line); border-radius:10px; background:transparent; color:var(--ink); }
 .btn { height:34px; padding:0 12px; border:1px solid var(--line); border-radius:10px; background:transparent; color:var(--ink); font-weight:800; cursor:pointer; }

@@ -1,4 +1,5 @@
 from django.db import models
+from django.conf import settings
 
 
 class Category(models.Model):
@@ -30,6 +31,13 @@ class Organization(models.Model):
         upload_to='organization_logos/', null=True, blank=True)
     time_create = models.DateTimeField(auto_now_add=True)
     updated = models.DateTimeField(auto_now=True)
+
+    curator = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True, blank=True,
+        on_delete=models.SET_NULL,
+        related_name='curated_organizations'
+    )
 
     class Meta:
         ordering = ['-time_create']

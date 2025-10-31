@@ -179,25 +179,23 @@ export default {
 
       <!-- Оргструктура -->
       <article class="card-width span-full">
-        <div class="card-inner">
-          <div class="structure-head">
-            <h3 class="block-title">Оргструктура</h3>
-            <div class="muted">
-              {{ (org.units_tree && org.units_tree.length) || 0 }} корневых подразделения
-            </div>
-          </div>
-          <div v-if="org.units_tree && org.units_tree.length" class="units-tree">
-           <OrgChartFlat
-              v-if="org?.units_tree?.length"
-              :key="org.updated || org.id" 
-              :tree="org.units_tree"
-              :org-id="org.id"
-              @saved="fetchDetail"
-            />
-          </div>
-          <p v-else class="muted">Структура не задана.</p>
-        </div>
-      </article>
+  <div class="card-inner">
+    <div class="structure-head">
+      <h3 class="block-title">Оргструктура</h3>
+      <div class="muted">
+        {{ Array.isArray(org?.units_tree) ? org.units_tree.length : 0 }} корневых подразделения
+      </div>
+    </div>
+
+    <!-- ВАЖНО: рендерим всегда, даже если данных нет -->
+    <OrgChartFlat
+      :key="org.updated || org.id"
+      :tree="org.units_tree || []"
+      :org-id="org.id"
+      @saved="fetchDetail"
+    />
+  </div>
+</article>
     </section>
 
     <!-- Скелет -->

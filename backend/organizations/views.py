@@ -1,5 +1,5 @@
 from django.utils import timezone
-from django.db.models import Count, Q,Prefetch
+from django.db.models import Count, Q, Prefetch
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework import viewsets, mixins, filters, permissions, parsers
 from rest_framework.decorators import action
@@ -8,7 +8,7 @@ from .serializer import CategorySerializer, OrganizationSerializer
 from .models import Category, Organization
 
 from staffUsers.permissions import IsStaffOrReadOnly, CanEditCategory, CanEditOrganization
-from staffUsers.models import AuditEntry, StaffProfile,StaffCuratorship
+from staffUsers.models import AuditEntry, StaffProfile, StaffCuratorship
 
 from organizationsStaff.models import OrgUnit
 from organizationsStaff.serializers import OrgUnitTreeSerializer
@@ -34,7 +34,6 @@ from organizationsStaff.serializers import OrgUnitTreeSerializer
 #         return Response({"organization": org.slug, "units": data})
 
 
-
 class CategoryViewSet(
     mixins.ListModelMixin, mixins.RetrieveModelMixin,
     mixins.CreateModelMixin, mixins.UpdateModelMixin,
@@ -43,7 +42,7 @@ class CategoryViewSet(
     serializer_class = CategorySerializer
     lookup_field = 'slug'
     lookup_url_kwarg = "slug"
-    permission_classes = [IsStaffOrReadOnly & CanEditCategory]
+    permission_classes = [IsStaffOrReadOnly, CanEditCategory]
 
     def perform_create(self, serializer):
         obj = serializer.save()
@@ -83,7 +82,7 @@ class OrganizationViewSet(viewsets.ModelViewSet):
     serializer_class = OrganizationSerializer
     lookup_field = "slug"
     lookup_url_kwarg = "slug"
-    permission_classes = [IsStaffOrReadOnly & CanEditOrganization]
+    permission_classes = [IsStaffOrReadOnly, CanEditOrganization]
 
     parser_classes = [parsers.MultiPartParser,
                       parsers.FormParser, parsers.JSONParser]
@@ -100,7 +99,8 @@ class OrganizationViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         org_links_qs = (
             StaffCuratorship.objects
-            .select_related("staff", "staff__user")     # чтобы были fio/phone/username
+            # чтобы были fio/phone/username
+            .select_related("staff", "staff__user")
             .filter(organization__isnull=False)
         )
         cat_links_qs = (
@@ -112,8 +112,10 @@ class OrganizationViewSet(viewsets.ModelViewSet):
             Organization.objects
             .select_related("category")
             .prefetch_related(
-                Prefetch("curator_links", queryset=org_links_qs, to_attr="curator_links_all_org"),
-                Prefetch("category__curator_links", queryset=cat_links_qs, to_attr="curator_links_all_cat"),
+                Prefetch("curator_links", queryset=org_links_qs,
+                         to_attr="curator_links_all_org"),
+                Prefetch("category__curator_links", queryset=cat_links_qs,
+                         to_attr="curator_links_all_cat"),
             )
         )
 
@@ -124,9 +126,9 @@ class OrganizationViewSet(viewsets.ModelViewSet):
                  .filter(organization=org, parent__isnull=True)
                  .prefetch_related("children", "children__children", "employees")
                  .order_by("order", "name"))
-        data = OrgUnitTreeSerializer(roots, many=True, context={"request": request}).data
+        data = OrgUnitTreeSerializer(roots, many=True, context={
+                                     "request": request}).data
         return Response({"organization": org.slug, "units": data})
-
 
     def perform_create(self, serializer):
         obj = serializer.save()
