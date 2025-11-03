@@ -2,14 +2,22 @@ from rest_framework import viewsets, permissions
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
-from .models import StaffProfile, StaffCuratorship,ManagementUnit, Department
-from .serializers import StaffProfileSerializer, StaffCuratorshipSerializer,ManagementUnitSerializer, DepartmentSerializer
+from .models import StaffProfile, StaffCuratorship, ManagementUnit, Department, Center
+
+from .serializers import StaffProfileSerializer, StaffCuratorshipSerializer, ManagementUnitSerializer, DepartmentSerializer, CenterSerializer
+
+
+class CenterViewSet(viewsets.ModelViewSet):
+    queryset = Center.objects.all().order_by("name")
+    serializer_class = CenterSerializer
+    # permission_classes = [permissions.IsAdminUser]  # при желании ослабьте
 
 
 class ManagementUnitViewSet(viewsets.ModelViewSet):
     queryset = ManagementUnit.objects.all().order_by("name")
     serializer_class = ManagementUnitSerializer
-    permission_classes = [permissions.IsAdminUser]  # при желании ослабьте до IsAuthenticated/ReadOnly
+    # при желании ослабьте до IsAuthenticated/ReadOnly
+    permission_classes = [permissions.IsAdminUser]
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):

@@ -1,11 +1,22 @@
 # staffUsers/serializers.py
 from rest_framework import serializers
-from .models import StaffProfile, StaffCuratorship, ManagementUnit, Department
+from .models import StaffProfile, StaffCuratorship, ManagementUnit, Department, Center
 from organizations.models import Organization
 from organizations.serializer import OrganizationSerializer
 
 
+class CenterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Center
+        fields = ["id", "name", "slug"]
+
+
 class ManagementUnitSerializer(serializers.ModelSerializer):
+    center = CenterSerializer(read_only=True)
+    center_id = serializers.PrimaryKeyRelatedField(
+        source="center", queryset=Center.objects.all(), write_only=True, required=True
+    )
+
     class Meta:
         model = ManagementUnit
         fields = ["id", "name", "slug"]
@@ -23,17 +34,21 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
 
 class BriefOrgSerializer(serializers.ModelSerializer):
-    category_name = serializers.CharField(source="category.name", read_only=True)
-    category_slug = serializers.CharField(source="category.slug", read_only=True)
+    category_name = serializers.CharField(
+        source="category.name", read_only=True)
+    category_slug = serializers.CharField(
+        source="category.slug", read_only=True)
 
     class Meta:
         model = Organization
-        fields = ["id", "slug", "name", "category_name", "category_slug", "logo"]
+        fields = ["id", "slug", "name",
+                  "category_name", "category_slug", "logo"]
 
 
 class StaffCuratorshipSerializer(serializers.ModelSerializer):
     staff_fio = serializers.CharField(source="staff.fio", read_only=True)
-    organization_data = BriefOrgSerializer(source="organization", read_only=True)
+    organization_data = BriefOrgSerializer(
+        source="organization", read_only=True)
 
     class Meta:
         model = StaffCuratorship
@@ -46,7 +61,7 @@ class StaffProfileSerializer(serializers.ModelSerializer):
     username = serializers.CharField(source="user.username", read_only=True)
     email = serializers.EmailField(source="user.email", read_only=True)
     fio = serializers.CharField(read_only=True)
-
+    center = CenterSerializer(read_only=True)
     management = ManagementUnitSerializer(read_only=True)
     department = DepartmentSerializer(read_only=True)
 
@@ -57,7 +72,8 @@ class StaffProfileSerializer(serializers.ModelSerializer):
         source="department", queryset=Department.objects.all(), write_only=True, required=False
     )
 
-    links = StaffCuratorshipSerializer(many=True, read_only=True, source="curator_links")
+    links = StaffCuratorshipSerializer(
+        many=True, read_only=True, source="curator_links")
 
     # организации, где он куратор напрямую
     curated_organizations = BriefOrgSerializer(
@@ -87,5 +103,6 @@ class StaffProfileSerializer(serializers.ModelSerializer):
                        .values_list("category_id", flat=True))
         if not cat_ids:
             return []
-        qs = Organization.objects.filter(category_id__in=cat_ids).select_related("category")
+        qs = Organization.objects.filter(
+            category_id__in=cat_ids).select_related("category")
         return BriefOrgSerializer(qs, many=True).data

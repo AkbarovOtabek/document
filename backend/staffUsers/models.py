@@ -18,13 +18,37 @@ def unique_slug(model, base):
     return slug
 
 
-class ManagementUnit(models.Model):
-    """Управление (например: Управление розничного бизнеса)."""
+class Center(models.Model):
+    """Центр (верхний уровень иерархии)."""
     name = models.CharField(max_length=200, unique=True)
     slug = models.SlugField(max_length=220, unique=True, blank=True)
 
     class Meta:
         ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        if not self.slug:
+            self.slug = unique_slug(Center, self.name)
+        return super().save(*args, **kwargs)
+
+
+class ManagementUnit(models.Model):
+    """Управление (например: Управление розничного бизнеса)."""
+    center = models.ForeignKey(Center, on_delete=models.CASCADE, related_name="managements",
+                               null=True, blank=True)
+    name = models.CharField(max_length=200, unique=True)
+    slug = models.SlugField(max_length=220, unique=True, blank=True)
+
+    class Meta:
+        ordering = ["center__name", "name"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["center", "name"], name="uniq_management_per_center"
+            )
+        ]
 
     def __str__(self):
         return self.name
@@ -55,7 +79,8 @@ class Department(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.slug:
-            self.slug = unique_slug(Department, f"{self.management.name}-{self.name}")
+            self.slug = unique_slug(
+                Department, f"{self.management.name}-{self.name}")
         return super().save(*args, **kwargs)
 
 
@@ -83,15 +108,18 @@ class StaffProfile(models.Model):
 
     # ФИО
     first_name = models.CharField(max_length=100, blank=True, default="")
-    second_name = models.CharField(max_length=100, blank=True, default="")  # отчество
+    second_name = models.CharField(
+        max_length=100, blank=True, default="")  # отчество
     last_name = models.CharField(max_length=100, blank=True, default="")
 
     # контакты и идентификаторы
     lotus = models.CharField(max_length=255, blank=True, default="")
     work_email = models.EmailField(blank=True, default="")
     work_phone = models.CharField(max_length=32, blank=True, default="")
-
     # орг-позиции
+    center = models.ForeignKey(
+        Center, null=True, blank=True, on_delete=models.SET_NULL, related_name="staff"
+    )
     position = models.CharField(
         max_length=32, choices=Position.choices, default=Position.EMPLOYEE
     )
@@ -103,8 +131,10 @@ class StaffProfile(models.Model):
     )
 
     # роли доступа
-    role = models.CharField(max_length=20, choices=Role.choices, default=Role.CURATOR)
-    management_flag = models.BooleanField(default=False)  # если нужно оставить ваш прежний флаг
+    role = models.CharField(
+        max_length=20, choices=Role.choices, default=Role.CURATOR)
+    # если нужно оставить ваш прежний флаг
+    management_flag = models.BooleanField(default=False)
 
     # кеш-счётчики кураторств
     curated_orgs_count = models.PositiveIntegerField(default=0)
@@ -123,22 +153,34 @@ class StaffProfile(models.Model):
 
     # Правила валидности орг-иерархии
     def clean(self):
+        # 1) Директор центра — обязан быть привязан к center, без management/department
+        if self.position == self.Position.DIRECTOR:
+            if not self.center_id:
+                raise ValidationError(
+                    "Директор центра должен быть привязан к центру.")
+            if self.management_id or self.department_id:
+                raise ValidationError(
+                    "Директор центра не должен быть привязан к управлению или отделу.")
         # Делопроизводитель и Директор: вне управлений/отделов
         if self.position in {self.Position.DIRECTOR, self.Position.RECORDS_CLERK}:
             if self.management_id or self.department_id:
-                raise ValidationError("Директор/Делопроизводитель не должны быть привязаны к управлению/отделу.")
+                raise ValidationError(
+                    "Директор/Делопроизводитель не должны быть привязаны к управлению/отделу.")
 
         # Замдиректора – привязан к управлению, но не к отделу
         if self.position == self.Position.DEPUTY_DIRECTOR:
             if not self.management_id or self.department_id:
-                raise ValidationError("Замдиректор должен быть привязан к управлению и не иметь отдела.")
+                raise ValidationError(
+                    "Замдиректор должен быть привязан к управлению и не иметь отдела.")
 
         # Начальник отдела – привязан к управлению и отделу (отдел внутри управления)
         if self.position == self.Position.HEAD_OF_DEPT:
             if not self.management_id or not self.department_id:
-                raise ValidationError("Начальник отдела должен быть привязан к управлению и отделу.")
+                raise ValidationError(
+                    "Начальник отдела должен быть привязан к управлению и отделу.")
             if self.department and self.department.management_id != self.management_id:
-                raise ValidationError("Отдел должен принадлежать выбранному управлению.")
+                raise ValidationError(
+                    "Отдел должен принадлежать выбранному управлению.")
 
         # Эксперты/Сотрудники – должны быть в отделе (и управлении, соответствующем отделу)
         if self.position in {
@@ -146,9 +188,11 @@ class StaffProfile(models.Model):
             self.Position.EXPERT_L1, self.Position.EMPLOYEE
         }:
             if not self.department_id or not self.management_id:
-                raise ValidationError("Сотрудник/Эксперт должен быть привязан к управлению и отделу.")
+                raise ValidationError(
+                    "Сотрудник/Эксперт должен быть привязан к управлению и отделу.")
             if self.department and self.department.management_id != self.management_id:
-                raise ValidationError("Отдел должен принадлежать выбранному управлению.")
+                raise ValidationError(
+                    "Отдел должен принадлежать выбранному управлению.")
 
     # Права (сверху вниз)
     def is_admin_like(self):
@@ -165,12 +209,14 @@ class StaffProfile(models.Model):
         if self.position == self.Position.HEAD_OF_DEPT:
             return (
                 self.curator_links.filter(organization=org, can_edit=True).exists() or
-                self.curator_links.filter(category=org.category, can_edit=True).exists()
+                self.curator_links.filter(
+                    category=org.category, can_edit=True).exists()
             )
         # прочие — только явные кураторские связи
         return (
             self.curator_links.filter(organization=org, can_edit=True).exists() or
-            self.curator_links.filter(category=org.category, can_edit=True).exists()
+            self.curator_links.filter(
+                category=org.category, can_edit=True).exists()
         )
 
     def can_edit_category(self, cat: Category):
@@ -210,7 +256,8 @@ class StaffCuratorship(models.Model):
 
     def clean(self):
         if bool(self.organization) == bool(self.category):
-            raise ValidationError("Укажите ИЛИ organization, ИЛИ category (но не оба).")
+            raise ValidationError(
+                "Укажите ИЛИ organization, ИЛИ category (но не оба).")
 
     def save(self, *args, **kwargs):
         self.full_clean()
@@ -230,10 +277,13 @@ class AuditEntry(models.Model):
         ORG = "org", "Организация"
         CAT = "cat", "Категория"
 
-    actor = models.ForeignKey("StaffProfile", on_delete=models.SET_NULL, null=True, blank=True)
+    actor = models.ForeignKey(
+        "StaffProfile", on_delete=models.SET_NULL, null=True, blank=True)
     target = models.CharField(max_length=3, choices=Target.choices)
-    org = models.ForeignKey(Organization, on_delete=models.SET_NULL, null=True, blank=True)
-    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True)
+    org = models.ForeignKey(
+        Organization, on_delete=models.SET_NULL, null=True, blank=True)
+    category = models.ForeignKey(
+        Category, on_delete=models.SET_NULL, null=True, blank=True)
     action = models.CharField(max_length=32)  # created/updated/deleted
     fields = models.JSONField(default=dict, blank=True)
     created = models.DateTimeField(default=timezone.now)
