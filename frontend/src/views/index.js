@@ -6,7 +6,7 @@ import Login from "./Login/Login.vue";
 import Account from "./Account/Account.vue";
 import SearchDocuments from "./SearchDocuments.vue";
 import Statistika from "./Statistika.vue";
-import Users from "./Users.vue";
+import Users from "./users/Users.vue";
 
 export const pages = {
   Account,

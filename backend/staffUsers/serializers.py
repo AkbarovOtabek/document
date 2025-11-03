@@ -19,7 +19,7 @@ class ManagementUnitSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ManagementUnit
-        fields = ["id", "name", "slug"]
+        fields = ["id", "name", "slug", "center", "center_id"]
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
@@ -89,7 +89,7 @@ class StaffProfileSerializer(serializers.ModelSerializer):
             "id", "username", "email", "fio",
             "first_name", "second_name", "last_name",
             "lotus", "work_email", "work_phone",
-            "position", "role",
+            "position", "role",  "center", "center_id",
             "management", "department", "management_id", "department_id",
             "management_flag",
             "curated_orgs_count", "curated_cats_count",
