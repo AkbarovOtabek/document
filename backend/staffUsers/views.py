@@ -17,20 +17,20 @@ class ManagementUnitViewSet(viewsets.ModelViewSet):
     queryset = ManagementUnit.objects.all().order_by("name")
     serializer_class = ManagementUnitSerializer
     # при желании ослабьте до IsAuthenticated/ReadOnly
-    permission_classes = [permissions.IsAdminUser]
+    # permission_classes = [permissions.IsAdminUser]
 
 
 class DepartmentViewSet(viewsets.ModelViewSet):
     queryset = Department.objects.select_related("management").all()
     serializer_class = DepartmentSerializer
-    permission_classes = [permissions.IsAdminUser]
+    # permission_classes = [permissions.IsAdminUser]
 
 
 class StaffProfileViewSet(viewsets.ModelViewSet):
     queryset = StaffProfile.objects.select_related("user").all()
     serializer_class = StaffProfileSerializer
     # управлять профилями — только админам (можете ослабить)
-    permission_classes = [permissions.IsAdminUser]
+    # permission_classes = [permissions.IsAdminUser]
 
     @action(detail=False, methods=["get"], permission_classes=[permissions.IsAuthenticated])
     def me(self, request):
@@ -46,4 +46,4 @@ class StaffCuratorshipViewSet(viewsets.ModelViewSet):
         "staff", "organization", "category")
     serializer_class = StaffCuratorshipSerializer
     # управлять связями — только админам/менеджерам
-    permission_classes = [permissions.IsAdminUser]
+    # permission_classes = [permissions.IsAdminUser]
