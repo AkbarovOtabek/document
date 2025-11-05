@@ -1,7 +1,5 @@
-<!-- src/components/users/OrgCircleBoard.vue -->
 <template>
   <div class="board" ref="board">
-    <!-- Пан/зум слой -->
     <div
       class="viewport"
       @wheel.prevent="onWheel"
@@ -9,130 +7,82 @@
       @mousemove="onMouseMove"
       @mouseup="onMouseUp"
       @mouseleave="onMouseUp"
-      @contextmenu.prevent
     >
       <div class="content" :style="contentStyle">
-        <!-- ====== СЦЕНА (масштабируется/двигается) ====== -->
-
-        <!-- ЛИНИИ: Центр → Управления -->
-        <svg class="links" :width="bw" :height="bh" v-if="center?.managements?.length">
-          <g stroke="#C9CDD1" stroke-width="1.6" stroke-linecap="round" fill="none">
-            <template v-for="(m, mi) in center.managements" :key="'L-m-'+m.id">
-              <line
-                :x1="cx + posCenter.x" :y1="cy + posCenter.y"
-                :x2="cx + posMU(mi).x" :y2="cy + posMU(mi).y"
-              />
-            </template>
-          </g>
-        </svg>
-
-        <!-- ЦЕНТР -->
-        <div class="node center" :style="translate(posCenter)"
-             @mouseenter="hoverKey = keyC(center)" @mouseleave="closeFlyout()">
+        <!-- Центр -->
+        <div class="node center" :class="nodeClass(keyC(center))" :style="translate(posCenter)">
           <CircleBubble
             :title="center.name"
             :subtitle="center.director?.fio || '—'"
             :role="center.director?.position || 'Директор центра'"
             side="center"
             :dataKey="keyC(center)"
-            @openInfo="$emit('open-modal', center.director)"
-            @openAdd="openFlyout({ key: keyC(center), level:'center', payload:center })"
+            @focus="focusOn({ key: keyC(center), level: 'center', payload: center, evt: $event })"
           />
         </div>
 
-        <!-- УПРАВЛЕНИЯ -->
+        <!-- Управления -->
         <template v-for="(m, mi) in center.managements" :key="m.id">
-          <!-- ЛИНИИ: Управление → Отделы -->
-          <svg class="links" :width="bw" :height="bh" v-if="m.departments?.length">
-            <g stroke="#D5D8DC" stroke-width="1.4" stroke-linecap="round" fill="none">
-              <template v-for="(d, di) in m.departments" :key="'L-d-'+d.id">
-                <line
-                  :x1="cx + posMU(mi).x" :y1="cy + posMU(mi).y"
-                  :x2="cx + posDEP(mi, di, m.departments.length).x"
-                  :y2="cy + posDEP(mi, di, m.departments.length).y"
-                />
-              </template>
-            </g>
-          </svg>
-
-          <div class="node mgmt" :style="translate(posMU(mi))"
-               @mouseenter="hoverKey = keyMU(m)" @mouseleave="closeFlyout()">
+          <div class="node mgmt" :class="nodeClass(keyMU(m))" :style="translate(posMU(mi))">
             <CircleBubble
               :title="m.name"
               :subtitle="m.director?.fio || '—'"
               :role="m.director?.position || 'Директор управления'"
               side="management"
               :dataKey="keyMU(m)"
-              @openInfo="$emit('open-modal', m.director)"
-              @openAdd="openFlyout({ key: keyMU(m), level:'management', payload:m })"
+              @focus="focusOn({ key: keyMU(m), level: 'management', payload: m, evt: $event })"
             />
           </div>
 
-          <!-- ОТДЕЛЫ -->
+          <!-- Отделы -->
           <template v-for="(d, di) in m.departments" :key="d.id">
-            <!-- ЛИНИИ: Отдел → Сотрудники -->
-            <svg class="links" :width="bw" :height="bh" v-if="d.staff?.length">
-              <g stroke="#DFE2E6" stroke-width="1.2" stroke-linecap="round" fill="none">
-                <template v-for="(s, si) in d.staff" :key="'L-s-'+s.id">
-                  <line
-                    :x1="cx + posDEP(mi, di, m.departments.length).x"
-                    :y1="cy + posDEP(mi, di, m.departments.length).y"
-                    :x2="cx + posSTAFF(mi, di, si, d.staff.length).x"
-                    :y2="cy + posSTAFF(mi, di, si, d.staff.length).y"
-                  />
-                </template>
-              </g>
-            </svg>
-
-            <div class="node dep" :style="translate(posDEP(mi, di, m.departments.length))"
-                 @mouseenter="hoverKey = keyDep(d)" @mouseleave="closeFlyout()">
+            <div
+              class="node dep"
+              :class="nodeClass(keyDep(d))"
+              :style="translate(posDEP(mi, di, m.departments.length))"
+            >
               <CircleBubble
                 :title="d.name"
                 :subtitle="d.head?.fio || '—'"
                 :role="d.head?.position || 'Начальник отдела'"
                 side="department"
                 :dataKey="keyDep(d)"
-                @openInfo="$emit('open-modal', d.head)"
-                @openAdd="openFlyout({ key: keyDep(d), level:'department', payload:d })"
+                @focus="focusOn({ key: keyDep(d), level: 'department', payload: d, evt: $event })"
               />
             </div>
 
-            <!-- СОТРУДНИКИ -->
+            <!-- Сотрудники -->
             <template v-for="(s, si) in d.staff" :key="s.id">
-              <div class="node staff" :style="translate(posSTAFF(mi, di, si, d.staff.length))"
-                   @mouseenter="hoverKey = keyStaff(s)" @mouseleave="closeFlyout()">
+              <div
+                class="node staff"
+                :class="nodeClass(keyStaff(s))"
+                :style="translate(posSTAFF(mi, di, si, d.staff.length))"
+              >
                 <CircleBubble
                   :title="fio(s)"
                   :subtitle="''"
                   :role="s.position || 'Сотрудник'"
                   side="staff"
                   :dataKey="keyStaff(s)"
-                  @openInfo="$emit('open-modal', s)"
-                  @openAdd="openFlyout({ key: keyStaff(s), level:'staff', payload:s })"
+                  @focus="focusOn({ key: keyStaff(s), level: 'staff', payload: s, evt: $event })"
                 />
               </div>
             </template>
           </template>
         </template>
-        <!-- ====== /СЦЕНА ====== -->
       </div>
     </div>
 
-    <!-- Flyout — не масштабируется -->
-    <div v-if="flyout.show" class="flyout" :style="flyoutStyle"
-         @mouseenter="flyout.pin = true" @mouseleave="closeFlyout(true)">
-      <button class="fx-btn" title="Добавить руководителя/сотрудника" @click="doFly('addPerson')">
-        <svg viewBox="0 0 24 24"><path d="M15 11a4 4 0 1 0-8 0 4 4 0 0 0 8 0z"/><path d="M3 20a7 7 0 0 1 14 0"/><path d="M19 8v6M16 11h6"/></svg>
-      </button>
-      <button class="fx-btn" title="Добавить дочернюю сущность" @click="doFly('addChild')">
-        <svg viewBox="0 0 24 24"><path d="M7 7h10v10H7z"/><path d="M3 3h4v4H3zM17 3h4v4h-4zM3 17h4v4H3zM17 17h4v4h-4z"/></svg>
-      </button>
-      <button class="fx-btn danger" title="Удалить" @click="doFly('delete')">
-        <svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg>
-      </button>
-      <button class="fx-btn" title="Изменить/настройки" @click="doFly('edit')">
-        <svg viewBox="0 0 24 24"><path d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7z"/></svg>
-      </button>
+    <!-- Панель информации -->
+    <div v-if="infoCard" class="info-panel">
+      <div class="info-title">{{ infoCard.title }}</div>
+      <div class="info-role">{{ infoCard.role }}</div>
+      <div class="info-lines">
+        <div class="row" v-for="(ln, i) in infoCard.lines" :key="i">
+          <span class="k">{{ ln.k }}:</span>
+          <span class="v">{{ ln.v }}</span>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -144,232 +94,280 @@ export default {
   name: "OrgCircleBoard",
   components: { CircleBubble },
   props: { center: { type: Object, required: true } },
-  emits: ["open-modal", "open-add", "action"],
   data() {
     return {
-      // БАЗОВЫЕ РАССТОЯНИЯ (регулируй под задачу)
-      gapMgmt: 460,  // центр → управление
-      gapDep:  280,  // управление → отдел
-      gapStaff:160,  // отдел → сотрудник
-
-      // размеры сцены
-      cx: 0, cy: 0, bw: 0, bh: 0,
-
-      // hover/flyout
-      hoverKey: null,
-      flyout: { show:false, x:0, y:0, level:null, payload:null, pin:false },
-
-      // пан/зум (как в Figma)
+      gapMgmt: 460,
+      gapDep: 280,
+      gapStaff: 160,
+      cx: 0,
+      cy: 0,
+      bw: 0,
+      bh: 0,
       scale: 1,
       minScale: 0.4,
       maxScale: 2.5,
       tx: 0,
       ty: 0,
+      activeKey: null,
+      infoCard: null,
       isPanning: false,
-      panBtn: 1, // 1 — средняя кнопка мыши
+      panBtn: 1,
       lastX: 0,
       lastY: 0,
     };
   },
   computed: {
-    posCenter(){ return {x:0, y:0}; },
-    flyoutStyle(){ return { left: this.flyout.x + "px", top: this.flyout.y + "px" }; },
-    contentStyle(){
-      return { transform: `translate(${this.tx}px, ${this.ty}px) scale(${this.scale})`,
-               transformOrigin: "0 0" };
+    posCenter() {
+      return { x: 0, y: 0 };
+    },
+    contentStyle() {
+      return {
+        transform: `translate(${this.tx}px, ${this.ty}px) scale(${this.scale})`,
+        transformOrigin: "0 0",
+      };
     },
   },
   mounted() {
     this.recalcBoard();
-    window.addEventListener("resize", this.recalcBoard, { passive:true });
+    window.addEventListener("resize", this.recalcBoard, { passive: true });
   },
-  beforeUnmount(){ window.removeEventListener("resize", this.recalcBoard); },
+  beforeUnmount() {
+    window.removeEventListener("resize", this.recalcBoard);
+  },
   methods: {
-    // ===== Ключи для конкретных кругов (чтобы flyout открывался около нужного)
-    keyC(c){ return `c:${c.id}`; },
-    keyMU(m){ return `m:${m.id}`; },
-    keyDep(d){ return `d:${d.id}`; },
-    keyStaff(s){ return `s:${s.id}`; },
-
-    // ===== Геометрия
-    recalcBoard(){
-      const box = this.$refs.board.getBoundingClientRect();
-      this.cx = box.width / 2; this.cy = box.height / 2;
-      this.bw = box.width;     this.bh = box.height;
+    keyC(c) {
+      return `c:${c.id}`;
     },
-    translate(p){
+    keyMU(m) {
+      return `m:${m.id}`;
+    },
+    keyDep(d) {
+      return `d:${d.id}`;
+    },
+    keyStaff(s) {
+      return `s:${s.id}`;
+    },
+
+    recalcBoard() {
+      const box = this.$refs.board.getBoundingClientRect();
+      this.cx = box.width / 2;
+      this.cy = box.height / 2;
+      this.bw = box.width;
+      this.bh = box.height;
+    },
+    translate(p) {
       return { transform: `translate(calc(-50% + ${p.x}px), calc(-50% + ${p.y}px))` };
     },
-    polar(idx, total, r, shift=0){
-      const n = Math.max(1, total);
-      const a = (idx/n)*2*Math.PI - Math.PI/2 + shift;
-      return { x: Math.cos(a)*r, y: Math.sin(a)*r };
+    polar(i, n, r, shift = 0) {
+      const a = (i / Math.max(1, n)) * 2 * Math.PI - Math.PI / 2 + shift;
+      return { x: Math.cos(a) * r, y: Math.sin(a) * r };
     },
-    posMU(mi){
+    posMU(mi) {
       const n = this.center?.managements?.length || 1;
-      const r = this.gapMgmt + Math.max(0, n-8)*16;
+      const r = this.gapMgmt + Math.max(0, n - 8) * 16;
       return this.polar(mi, n, r);
     },
-    posDEP(mi, di, dn){
+    posDEP(mi, di, dn) {
       const mu = this.posMU(mi);
-      const localR = this.gapDep + Math.max(0, dn-6)*12;
-      const local  = this.polar(di, dn, localR, (mi*10)*Math.PI/180);
+      const localR = this.gapDep + Math.max(0, dn - 6) * 12;
+      const local = this.polar(di, dn, localR, (mi * 10 * Math.PI) / 180);
       return { x: mu.x + local.x, y: mu.y + local.y };
     },
-    posSTAFF(mi, di, si, sn){
-      const dep    = this.posDEP(mi, di, 1);
-      const localR = this.gapStaff + Math.max(0, sn-8)*8;
-      const local  = this.polar(si, sn, localR, ((mi+di)*8)*Math.PI/180);
+    posSTAFF(mi, di, si, sn) {
+      const dep = this.posDEP(mi, di, 1);
+      const localR = this.gapStaff + Math.max(0, sn - 8) * 8;
+      const local = this.polar(si, sn, localR, ((mi + di) * 8 * Math.PI) / 180);
       return { x: dep.x + local.x, y: dep.y + local.y };
     },
-
-    fio(s){
-      if(!s) return "—";
-      if(s.fio) return s.fio;
+    fio(s) {
+      if (!s) return "—";
+      if (s.fio) return s.fio;
       const parts = [s.last_name, s.first_name, s.second_name].filter(Boolean);
       return parts.length ? parts.join(" ") : s.username || "—";
     },
 
-    // ===== Flyout
-    openFlyout({ key, level, payload, evt }) {
-      const board = this.$refs.board.getBoundingClientRect();
-      let rect = null;
-      if (evt && evt.target && typeof evt.target.closest === 'function') {
-        const bubble = evt.target.closest('.bubble');
-        if (bubble) rect = bubble.getBoundingClientRect();
-      }
-      if (!rect) {
-        // fallback по data-key
-        const el = this.$el.querySelector(`[data-key="${key}"]`);
-        rect = (el ? el.getBoundingClientRect() : board);
-      }
+    // Клик: фокус + приближение + инфо
+    focusOn({ key, level, payload, evt }) {
+      this.activeKey = key;
 
-      const x = rect.left - board.left - 10;            // слева от круга
-      const y = rect.top  - board.top  + rect.height/2;  // по центру круга
-      this.flyout = { show:true, x, y, level, payload, pin:false };
-    },
-    closeFlyout(fromHover=false){
-      this.hoverKey = null;
-      if(fromHover && this.flyout.pin) return;
-      this.flyout.show = false;
-    },
-    doFly(type){
-      const { level, payload } = this.flyout;
-      if(type === "addPerson"){
-        this.$emit("open-add", {
-          type:
-            level === "department" ? "staff" :
-            level === "management" ? "director_management" :
-            level === "center"     ? "director_center" : "staff",
-          context: payload
-        });
-      }else if(type === "addChild"){
-        this.$emit("open-add", {
-          type:
-            level === "center"     ? "management" :
-            level === "management" ? "department" : "staff",
-          context: payload
-        });
-      }else if(type === "edit"){
-        this.$emit("action", { type:"edit", level, payload });
-      }else if(type === "delete"){
-        this.$emit("action", { type:"delete", level, payload });
-      }
-      this.flyout.show = false;
+      // Центрирование выбранного пузыря
+      const boardBox = this.$refs.board.getBoundingClientRect();
+      const el = this.$el.querySelector(`[data-key="${key}"]`);
+      const rect = el ? el.getBoundingClientRect() : boardBox;
+
+      const bx = rect.left - boardBox.left + rect.width / 2;
+      const by = rect.top - boardBox.top + rect.height / 2;
+      const cx = boardBox.width / 2;
+      const cy = boardBox.height / 2;
+
+      const newScale = Math.min(this.maxScale, Math.max(this.minScale, this.scale * 1.1));
+      const wx = (bx - this.tx) / this.scale;
+      const wy = (by - this.ty) / this.scale;
+
+      this.scale = newScale;
+      this.tx = cx - wx * this.scale;
+      this.ty = cy - wy * this.scale;
+
+      // Составляем карточку данных
+      this.infoCard = this.composeInfo(level, payload);
     },
 
-    // ===== Пан/зум (как в Figma)
-    onWheel(e){
-      const speed = 0.2;
-      const factor = Math.exp(-e.deltaY * 0.001 * speed);
+    composeInfo(level, payload) {
+      if (level === "staff") {
+        return {
+          title: this.fio(payload),
+          role: payload.position || "Сотрудник",
+          lines: [
+            { k: "Отдел", v: this.findDepartmentName(payload.department) || "—" },
+            { k: "Управление", v: this.findManagementName(payload.management) || "—" },
+          ],
+        };
+      }
+      if (level === "department") {
+        return {
+          title: payload.head?.fio || "—",
+          role: payload.head?.position || "Начальник отдела",
+          lines: [{ k: "Отдел", v: payload.name }],
+        };
+      }
+      if (level === "management") {
+        return {
+          title: payload.director?.fio || "—",
+          role: payload.director?.position || "Директор управления",
+          lines: [{ k: "Управление", v: payload.name }],
+        };
+      }
+      if (level === "center") {
+        return {
+          title: payload.director?.fio || "—",
+          role: payload.director?.position || "Директор центра",
+          lines: [{ k: "Центр", v: payload.name }],
+        };
+      }
+      return null;
+    },
+    findManagementName(m) {
+      const id = typeof m === "object" ? m?.id : m;
+      return this.center.managements.find((x) => x.id === id)?.name;
+    },
+    findDepartmentName(d) {
+      const id = typeof d === "object" ? d?.id : d;
+      for (const mu of this.center.managements)
+        for (const dep of mu.departments) if (dep.id === id) return dep.name;
+      return null;
+    },
+
+    nodeClass(key) {
+      if (!this.activeKey) return null;
+      return this.activeKey === key ? "focused" : "faded";
+    },
+
+    // Пан/зум
+    onWheel(e) {
+      const factor = Math.exp(-e.deltaY * 0.001 * 0.2);
       const newScale = Math.min(this.maxScale, Math.max(this.minScale, this.scale * factor));
-
-      // Зум к курсору — сохраняем мировую точку под курсором
       const rect = this.$refs.board.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
-
       const wx = (mx - this.tx) / this.scale;
       const wy = (my - this.ty) / this.scale;
-
       this.scale = newScale;
       this.tx = mx - wx * this.scale;
       this.ty = my - wy * this.scale;
     },
-    onMouseDown(e){
-      if (e.button !== this.panBtn) return; // только средняя кнопка мыши
+    onMouseDown(e) {
+      if (e.button !== this.panBtn) return;
       this.isPanning = true;
-      this.lastX = e.clientX; this.lastY = e.clientY;
+      this.lastX = e.clientX;
+      this.lastY = e.clientY;
     },
-    onMouseMove(e){
+    onMouseMove(e) {
       if (!this.isPanning) return;
       const dx = e.clientX - this.lastX;
       const dy = e.clientY - this.lastY;
-      this.tx += dx; this.ty += dy;
-      this.lastX = e.clientX; this.lastY = e.clientY;
+      this.tx += dx;
+      this.ty += dy;
+      this.lastX = e.clientX;
+      this.lastY = e.clientY;
     },
-    onMouseUp(){ this.isPanning = false; },
-  }
+    onMouseUp() {
+      this.isPanning = false;
+    },
+  },
 };
 </script>
 
 <style scoped>
-.board{
-  position:relative;
-  width:100%;
-  height:80vh;
-  min-height:680px;
-  background:#555;        /* фон как на референс-скрине */
-  overflow:hidden;
+.board {
+  position: relative;
+  width: 100%;
+  height: 80vh;
+  min-height: 680px;
+  background: #555;
+  overflow: hidden;
 }
-
-/* Пан/зум контейнер */
-.viewport{
-  position:absolute;
-  inset:0;
-  overflow:hidden;
+.viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
   cursor: grab;
 }
-.viewport:active{ cursor: grabbing; }
-
-.content{
-  position:absolute;
-  inset:0;
-  /* Весь контент масштабируется transform-ом из contentStyle */
+.viewport:active {
+  cursor: grabbing;
+}
+.content {
+  position: absolute;
+  inset: 0;
 }
 
-/* Линии и узлы */
-.links{ position:absolute; inset:0; pointer-events:none; z-index:0; }
-.node { position:absolute; top:50%; left:50%; transform:translate(-50%,-50%); z-index:1; }
-.node.center{ z-index:2; }
+/* Визуальные состояния */
+.node {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  transition: all 0.2s ease;
+}
+.node.focused {
+  z-index: 10;
+  transform: translate(-50%, -50%) scale(1.18);
+}
+.node.faded {
+  opacity: 0.28;
+  filter: grayscale(70%);
+}
 
-/* --------- базовая стилизация пузырей переносится в CircleBubble.vue --------- */
-
-/* Flyout — поверх и НЕ масштабируется */
-.flyout{
-  position:absolute;
-  width:220px; height:220px;
-  transform:translate(-50%,-50%);
-  z-index:3;
-  pointer-events:auto;
+/* Карточка информации */
+.info-panel {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  width: 320px;
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.25);
+  padding: 12px;
+  z-index: 999;
 }
-.flyout::before{
-  content:"";
-  position:absolute; inset:0;
-  clip-path:polygon(0% 50%, 75% 10%, 75% 90%);
-  background:#e9e9ec;
-  border-radius:16px;
-  box-shadow:0 10px 26px rgba(0,0,0,.25) inset, 0 6px 16px rgba(0,0,0,.25);
+.info-title {
+  font-weight: 700;
+  font-size: 16px;
 }
-.fx-btn{
-  position:absolute; width:46px; height:46px; border-radius:14px;
-  background:#fff; border:none; display:grid; place-items:center; cursor:pointer;
-  box-shadow:0 6px 16px rgba(0,0,0,.18);
+.info-role {
+  color: #475569;
+  margin-top: 2px;
 }
-.fx-btn svg{ width:26px; height:26px; stroke:#111; fill:none; stroke-width:1.8; }
-.fx-btn.danger svg{ stroke:#b91c1c; }
-.fx-btn:nth-child(1){ left:14px; top:26px; }
-.fx-btn:nth-child(2){ left:14px; top:90px; }
-.fx-btn:nth-child(3){ left:150px; top:90px; border-radius:999px; } /* «−» на носике */
-.fx-btn:nth-child(4){ left:14px; bottom:26px; }
+.info-lines {
+  margin-top: 8px;
+  display: grid;
+  gap: 6px;
+}
+.info-lines .row .k {
+  color: #64748b;
+  margin-right: 6px;
+}
+.info-lines .row .v {
+  font-weight: 600;
+}
 </style>

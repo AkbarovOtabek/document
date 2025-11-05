@@ -1,5 +1,5 @@
 <template>
-  <div class="modal" v-if="show">
+  <div class="modal">
     <div class="modal-card">
       <header>
         <h3>Добавить {{ label }}</h3>
@@ -7,7 +7,7 @@
       </header>
       <section>
         <input v-model="form.name" placeholder="Название" />
-        <input v-model="form.fio" placeholder="ФИО руководителя" />
+        <input v-model="form.fio" placeholder="ФИО руководителя/сотрудника" />
         <input v-model="form.position" placeholder="Должность" />
       </section>
       <footer>
@@ -22,8 +22,9 @@
 export default {
   name: "AddEntityModal",
   props: {
-    show: Boolean,
+    // show: Boolean,
     type: String,
+    preset: Object,
   },
   emits: ["close", "save"],
   data() {
@@ -43,6 +44,12 @@ export default {
       );
     },
   },
+  preset: {
+    immediate: true,
+    handler(p) {
+      if (p) this.form = { ...this.form, ...p };
+    },
+  },
   methods: {
     save() {
       this.$emit("save", { ...this.form, type: this.type });
@@ -59,6 +66,7 @@ export default {
   background: rgba(0, 0, 0, 0.45);
   display: grid;
   place-items: center;
+  z-index: 9999;
 }
 .modal-card {
   background: #fff;

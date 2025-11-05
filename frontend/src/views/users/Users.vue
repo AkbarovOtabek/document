@@ -1,17 +1,17 @@
 <template>
   <div class="scene">
-    <!-- Загрузка -->
+    <!-- TOP ACTION BAR -->
+    <div class="actions-bar" v-if="!loading">
+      <button @click="ui.addStruct = true">Добавить структуру</button>
+      <button @click="ui.addStaff = true">Добавить сотрудника</button>
+      <button class="danger" @click="ui.delStaff = true">Удалить сотрудника</button>
+      <button class="danger" @click="ui.delUnit = true">Удалить отдел/упр./центр</button>
+    </div>
+
     <div v-if="loading" class="loader">Загрузка...</div>
 
-    <!-- Основная доска -->
-    <OrgCircleBoard
-      v-else-if="centerData"
-      :center="centerData"
-      @open-modal="openPerson"
-      @open-add="openAdd"
-    />
+    <OrgCircleBoard v-else-if="centerData" :center="centerData" @open-modal="openPerson" />
 
-    <!-- Модальное окно сотрудника -->
     <PersonModal
       v-if="selectedPerson"
       :person="selectedPerson"
@@ -20,12 +20,35 @@
       @delete="deletePerson"
     />
 
-    <!-- Модальное окно добавления -->
-    <AddEntityModal
-      v-if="addModal.show"
-      :type="addModal.type"
-      @close="addModal = { show: false, type: null }"
-      @save="saveEntity"
+    <!-- MODALS -->
+    <AddStructureModal
+      v-if="ui.addStruct"
+      :centers="centers"
+      :managements="managements"
+      @close="ui.addStruct = false"
+      @saved="onSaved"
+    />
+    <AddStaffModal
+      v-if="ui.addStaff"
+      :centers="centers"
+      :managements="managements"
+      :departments="departments"
+      @close="ui.addStaff = false"
+      @saved="onSaved"
+    />
+    <DeleteStaffModal
+      v-if="ui.delStaff"
+      :staff="staff"
+      @close="ui.delStaff = false"
+      @deleted="onSaved"
+    />
+    <DeleteUnitModal
+      v-if="ui.delUnit"
+      :centers="centers"
+      :managements="managements"
+      :departments="departments"
+      @close="ui.delUnit = false"
+      @deleted="onSaved"
     />
   </div>
 </template>
@@ -33,39 +56,51 @@
 <script>
 import OrgCircleBoard from "./OrgCircleBoard.vue";
 import PersonModal from "./PersonModal.vue";
-import AddEntityModal from "./AddEntityModal.vue";
+import AddStructureModal from "./AddStructureModal.vue";
+import AddStaffModal from "./AddStaffModal.vue";
+import DeleteStaffModal from "./DeleteStaffModal.vue";
+import DeleteUnitModal from "./DeleteUnitModal.vue";
+
 import axios from "axios";
 import { API_BASE_URL } from "../../API";
+
 export default {
   name: "Users",
-  components: { OrgCircleBoard, PersonModal, AddEntityModal },
-
+  components: {
+    OrgCircleBoard,
+    PersonModal,
+    AddStructureModal,
+    AddStaffModal,
+    DeleteStaffModal,
+    DeleteUnitModal,
+  },
   data() {
     return {
       loading: false,
       error: "",
+      // для схемы
       centerData: null,
+      // для селектов в модалках (сырые списки из API)
+      centers: [],
+      managements: [],
+      departments: [],
+      staff: [],
+      // UI
       selectedPerson: null,
-      addModal: { show: false, type: null },
+      ui: { addStruct: false, addStaff: false, delStaff: false, delUnit: false },
     };
   },
-
   async mounted() {
     await this.loadAll();
   },
-
   methods: {
-    /** Универсальный способ получить id (если объект или число) */
     getId(val) {
       return typeof val === "object" && val ? val.id : val;
     },
 
-    /** Загрузка всей структуры (центр → управления → отделы → сотрудники) */
     async loadAll() {
       try {
         this.loading = true;
-        this.error = "";
-
         const [centers, managements, departments, staff] = await Promise.all([
           axios.get(`${API_BASE_URL}api/staff/centers/`),
           axios.get(`${API_BASE_URL}api/staff/management/`),
@@ -73,101 +108,71 @@ export default {
           axios.get(`${API_BASE_URL}api/staff/users/`),
         ]);
 
-        // Универсальный метод — если DRF вернул results
-        const getResults = (data) =>
-          Array.isArray(data) ? data : data.results ? data.results : [];
+        const pick = (d) => (Array.isArray(d.data) ? d.data : d.data?.results ?? []);
+        this.centers = pick(centers);
+        this.managements = pick(managements);
+        this.departments = pick(departments);
+        this.staff = pick(staff);
 
-        const centersData = getResults(centers.data);
-        const managementsData = getResults(managements.data);
-        const departmentsData = getResults(departments.data);
-        const staffData = getResults(staff.data);
+        if (!this.centers.length) throw new Error("Центры не найдены");
 
-        if (!centersData.length) throw new Error("Центры не найдены");
-
-        const center = centersData[0]; // пока берём первый центр
+        const center = this.centers[0];
         const getId = this.getId;
 
-        // === УПРАВЛЕНИЯ ===
-        const managementList = managementsData
+        const managementList = this.managements
           .filter((m) => getId(m.center) === center.id)
           .map((m) => ({
             ...m,
-            director: staffData.find(
+            director: this.staff.find(
               (s) => getId(s.management) === m.id && s.position === "deputy_director"
-            ) || {
-              fio: "—",
-              position: "Директор управления",
-            },
+            ) || { fio: "—", position: "Директор управления" },
             departments: [],
           }));
 
-        // === ОТДЕЛЫ ===
-        departmentsData.forEach((dep) => {
+        this.departments.forEach((dep) => {
           const m = managementList.find((x) => x.id === getId(dep.management));
           if (m) {
-            const head = staffData.find(
+            const head = this.staff.find(
               (s) => getId(s.department) === dep.id && s.position === "head_of_department"
             ) || { fio: "—", position: "Начальник отдела" };
-
-            const employees = staffData.filter(
+            const employees = this.staff.filter(
               (s) => getId(s.department) === dep.id && s.position !== "head_of_department"
             );
-
-            m.departments.push({
-              ...dep,
-              head,
-              staff: employees,
-            });
+            m.departments.push({ ...dep, head, staff: employees });
           }
         });
 
-        // === ЦЕНТР ===
         this.centerData = {
           id: center.id,
           name: center.name,
-          director: staffData.find(
+          director: this.staff.find(
             (s) => s.position === "director" && (!s.management || !s.department)
-          ) || {
-            fio: "—",
-            position: "Директор центра",
-          },
+          ) || { fio: "—", position: "Директор центра" },
           managements: managementList,
         };
-
-        console.log("✅ Центр:", this.centerData);
       } catch (e) {
-        console.error("Ошибка при загрузке структуры:", e);
+        console.error(e);
         this.error = "Ошибка при загрузке структуры.";
       } finally {
         this.loading = false;
       }
     },
 
-    /** Модалка информации о человеке */
+    onSaved() {
+      // общий хук после любых CRUD
+      this.ui = { addStruct: false, addStaff: false, delStaff: false, delUnit: false };
+      this.loadAll();
+    },
+
     openPerson(p) {
       this.selectedPerson = p;
     },
-
-    /** Модалка добавления управления/отдела/сотрудника */
-    openAdd(payload) {
-      this.addModal = { show: true, type: payload.type };
-    },
-
-    /** Редактирование */
     editPerson(p) {
       alert(`Редактировать ${p.fio}`);
     },
-
-    /** Удаление */
     deletePerson(p) {
-      if (confirm(`Удалить ${p.fio}?`)) alert("Удалён!");
+      if (confirm(`Удалить ${p.fio}?`)) alert("Удалён (демо)");
       this.selectedPerson = null;
-    },
-
-    /** Добавление нового элемента */
-    saveEntity(e) {
-      alert(`Добавлен новый ${e.type}: ${e.name}`);
-      this.addModal = { show: false, type: null };
     },
   },
 };
@@ -176,20 +181,29 @@ export default {
 <style scoped>
 .scene {
   padding: 20px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
   background: #f1f5f9;
   min-height: 100vh;
+  padding-top: 80px;
 }
-
 .loader {
   font-weight: bold;
   color: #2563eb;
 }
 
-.error {
+.actions-bar {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.actions-bar > button {
+  border: 1px solid #cbd5e1;
+  background: #fff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.actions-bar > button.danger {
+  border-color: #fecaca;
   color: #b91c1c;
-  margin-top: 12px;
 }
 </style>
