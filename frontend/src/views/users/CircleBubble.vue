@@ -1,40 +1,23 @@
 <template>
   <div
-    class="bubble"
-    :style="{
-      width: size + 'px',
-      height: size + 'px',
-      '--fs-top': fsTop + 'px',
-      '--fs-role': fsRole + 'px',
-      '--fs-fio': fsFio + 'px',
-    }"
+    class="tile"
+    :class="side"
+    :style="{ width: size + 'px', height: size + 'px' }"
     :data-key="dataKey"
     @mouseenter="hovering = true"
     @mouseleave="hovering = false"
     @click.stop="$emit('focus', $event)"
   >
-    <!-- (+) можно оставить/убрать; по задаче — убираем, но оставляю на будущее. Комментируйте блок если не нужен -->
-    <!--
-    <button
-      class="sidebtn left"
-      v-show="hovering"
-      :data-key="dataKey"
-      title="Добавить"
-      @click.stop="$emit('openAdd', $event)"
-    >
-      +
-    </button>
-    -->
-
-    <!-- иконка -->
-    <div class="avatar-figure">
-      <svg viewBox="0 0 24 24" aria-hidden="true">
-        <circle cx="12" cy="8" r="4" />
-        <path d="M4 20a8 8 0 0 1 16 0" />
-      </svg>
+    <div class="tile-extrude"></div>
+    <div class="tile-face">
+      <div class="avatar-figure">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <circle cx="12" cy="8" r="4" />
+          <path d="M4 20a8 8 0 0 1 16 0" />
+        </svg>
+      </div>
     </div>
 
-    <!-- подписи -->
     <div class="label top" v-if="title">{{ title }}</div>
     <div class="label role">{{ role }}</div>
     <div class="label fio" v-if="subtitle">
@@ -53,39 +36,19 @@ export default {
     side: { type: String, default: "staff" }, // center|management|department|staff
     dataKey: String,
   },
-  emits: [
-    "focus",
-    // "openAdd"
-  ],
+  emits: ["focus"],
   data() {
     return { hovering: false };
   },
   computed: {
     size() {
       return this.side === "center"
-        ? 240
+        ? 160
         : this.side === "management"
-        ? 180
+        ? 130
         : this.side === "department"
-        ? 150
-        : 115;
-    },
-    fsTop() {
-      const l = (this.title || "").length;
-      const base = this.side === "center" ? 14 : this.side === "management" ? 12 : 11;
-      if (l > 60) return base - 4;
-      if (l > 40) return base - 2;
-      return base;
-    },
-    fsRole() {
-      return this.side === "center" ? 14 : this.side === "management" ? 12 : 11;
-    },
-    fsFio() {
-      const l = (this.subtitle || "").length;
-      const base = this.side === "center" ? 14 : 8;
-      if (l > 40) return base - 3;
-      if (l > 26) return base - 1;
-      return base;
+        ? 110
+        : 90;
     },
     fioLines() {
       if (!this.subtitle) return [];
@@ -103,81 +66,50 @@ export default {
 </script>
 
 <style scoped>
-.bubble {
+/* Палитра под задачу */
+:root {
+  --tile-center:#ff8746;     --tile-center-dark:#cc6b36;   /* оранжевый */
+  --tile-mgmt:#8b5cf6;       --tile-mgmt-dark:#6d28d9;     /* фиолетовый */
+  --tile-dep:#1f3b63;        --tile-dep-dark:#162a45;      /* тёмно-синий */
+  --tile-staff:#59d1c7;      --tile-staff-dark:#2a9e95;    /* светло сине-зелёный */
+}
+
+.tile {
   position: relative;
-  border-radius: 50%;
-  background: #fff;
-  border: 2px solid #e5e7eb;
-  display: grid;
-  place-items: center;
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.18);
-  transition: transform 0.18s ease;
+  transform: rotate(45deg);
+  transform-style: preserve-3d;
+  filter: drop-shadow(0 14px 30px rgba(0,0,0,.25));
+  transition: transform .18s ease, filter .18s ease;
 }
-.bubble:hover {
-  transform: scale(1.02);
+.tile:hover { transform: rotate(45deg) scale(1.04); }
+
+.tile-face{
+  position:absolute; inset:0;
+  border-radius:14px;
+  background: var(--c, #fff);
+  display:grid; place-items:center;
+}
+.tile-extrude{
+  content:""; position:absolute; inset:0;
+  border-radius:14px;
+  background: var(--c-dark, #d1d5db);
+  transform: translate(10px,10px);
+  z-index:-1;
 }
 
-.avatar-figure {
-  width: 44%;
-  aspect-ratio: 1/1;
-}
-.avatar-figure svg {
-  width: 100%;
-  height: 100%;
-  fill: #000;
-}
+.avatar-figure{ width:40%; aspect-ratio:1/1; transform: rotate(-45deg); }
+.avatar-figure svg{ width:100%; height:100%; fill:#ffffff; }
 
-.label {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  color: #111;
-  text-align: center;
-  font-weight: 500;
-  overflow: hidden;
+.label{
+  position:absolute; left:50%; transform: translateX(-50%) rotate(-45deg);
+  color:#eaf2ff; text-align:center; font-weight:600; text-shadow:0 1px 2px rgba(0,0,0,.35);
 }
-.label.top {
-  top: 10%;
-  width: 78%;
-  font-size: 9px;
-  line-height: 1.15;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
-}
-.label.role {
-  bottom: 22%;
-  width: 82%;
-  font-size: var(--fs-role, 14px);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
-.label.fio {
-  bottom: 8%;
-  width: 82%;
-  font-size: var(--fs-fio, 16px);
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
+.label.top{ top:-46px; width:220px; font-size:12px; line-height:1.15; }
+.label.role{ bottom:-22px; font-size:12px; }
+.label.fio{ bottom:-40px; width:220px; font-size:12px; display:flex; flex-direction:column; gap:2px; }
 
-/* .sidebtn {
-  position: absolute;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  border: none;
-  background: #111;
-  color: #fff;
-  font-weight: 800;
-  display: grid;
-  place-items: center;
-  cursor: pointer;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.25);
-}
-.sidebtn.left {
-  left: -22px;
-} */
+.center     { --c:var(--tile-center); --c-dark:var(--tile-center-dark); }
+.management { --c:var(--tile-mgmt);   --c-dark:var(--tile-mgmt-dark); }
+.department { --c:var(--tile-dep);    --c-dark:var(--tile-dep-dark); }
+.staff      { --c:var(--tile-staff);  --c-dark:var(--tile-staff-dark); }
 </style>
