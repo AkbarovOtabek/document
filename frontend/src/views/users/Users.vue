@@ -8,6 +8,9 @@
       <button class="danger" @click="ui.delUnit = true">Удалить отдел/упр./центр</button>
     </div>
 
+    <!-- <section>
+      <div></div>
+    </section> -->
     <div v-if="loading" class="loader">Загрузка...</div>
 
     <OrgCircleBoard v-else-if="centerData" :center="centerData" @open-modal="openPerson" />
@@ -205,5 +208,38 @@ export default {
 .actions-bar > button.danger {
   border-color: #fecaca;
   color: #b91c1c;
+}
+
+section {
+  perspective: 900px;
+  padding-bottom:50%;
+}
+section div {
+  position: relative;
+  width: 20%;
+  padding-bottom: 20%;
+  margin: 0 auto;
+  transform-style: preserve-3d;
+  background: #C52329;
+  transform: rotateX(60deg) rotatez(45deg);
+}
+section div:before, div:after {
+  content: '';
+  position: absolute;
+ 
+  transform-origin: -2% -2%;
+  background: inherit;
+}
+section div:before {
+   width: 100%;
+  height: 30%;
+  top: 100%; left: -2%;
+  transform: rotateX(-90deg);
+}
+section div:after {
+     width: 30%;
+  height: 100%;
+  top: 0; left: 100%;
+  transform: rotateY(90deg);
 }
 </style>

@@ -1,28 +1,26 @@
 <template>
-  <div
-    class="tile"
-    :class="side"
-    :style="{ width: size + 'px', height: size + 'px' }"
-    :data-key="dataKey"
-    @mouseenter="hovering = true"
-    @mouseleave="hovering = false"
-    @click.stop="$emit('focus', $event)"
-  >
-    <div class="tile-extrude"></div>
-    <div class="tile-face">
+  <div class="tile" :class="side" @click.stop="$emit('focus', $event)">
+    <div class="cube">
+      <!-- верхняя грань -->
+      <div class="face top"></div>
+      <!-- боковые грани -->
+      <div class="face left"></div>
+      <div class="face right"></div>
+
+      <!-- человек, «стоит» на верхней грани -->
       <div class="avatar-figure">
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <circle cx="12" cy="8" r="4" />
-          <path d="M4 20a8 8 0 0 1 16 0" />
+          <circle cx="12" cy="4.2" r="2.6" />
+          <rect x="9.4" y="7"  width="5.2" height="8"  rx="1.3" />
+          <rect x="14.8" y="10.2" width="2.2" height="7.2" rx="1.2" transform="rotate(-15 5.4 11.8)" />
+          <rect x="7.0" y="9.6" width="2.2" height="7.2" rx="1.2" transform="rotate(13 18.6 11.8)" />
+          <rect x="9"  y="15"  width="2.6" height="7.6" rx="1.1" transform="rotate(6 11.3 18.8)" />
+          <rect x="12.6" y="15"  width="2.6" height="7.6" rx="1.1" transform="rotate(-6 12.9 18.8)" />
         </svg>
       </div>
     </div>
 
     <div class="label top" v-if="title">{{ title }}</div>
-    <div class="label role">{{ role }}</div>
-    <div class="label fio" v-if="subtitle">
-      <span v-for="(line, i) in fioLines" :key="i">{{ line }}</span>
-    </div>
   </div>
 </template>
 
@@ -33,7 +31,7 @@ export default {
     title: String,
     subtitle: String,
     role: String,
-    side: { type: String, default: "staff" }, // center|management|department|staff
+    side: { type: String, default: "staff" }, 
     dataKey: String,
   },
   emits: ["focus"],
@@ -66,50 +64,86 @@ export default {
 </script>
 
 <style scoped>
-/* Палитра под задачу */
-:root {
-  --tile-center:#ff8746;     --tile-center-dark:#cc6b36;   /* оранжевый */
-  --tile-mgmt:#8b5cf6;       --tile-mgmt-dark:#6d28d9;     /* фиолетовый */
-  --tile-dep:#1f3b63;        --tile-dep-dark:#162a45;      /* тёмно-синий */
-  --tile-staff:#59d1c7;      --tile-staff-dark:#2a9e95;    /* светло сине-зелёный */
-}
-
-.tile {
-  position: relative;
+/* размеры и поворот узла для твоего графа */
+.tile{
+  position:relative;
+  width:140px; height:140px;
   transform: rotate(45deg);
-  transform-style: preserve-3d;
-  filter: drop-shadow(0 14px 30px rgba(0,0,0,.25));
-  transition: transform .18s ease, filter .18s ease;
+  cursor:pointer;
+  perspective: 900px;
 }
-.tile:hover { transform: rotate(45deg) scale(1.04); }
 
-.tile-face{
+/* контейнер с 3D-наследованием */
+.cube{
   position:absolute; inset:0;
-  border-radius:14px;
-  background: var(--c, #fff);
   display:grid; place-items:center;
-}
-.tile-extrude{
-  content:""; position:absolute; inset:0;
-  border-radius:14px;
-  background: var(--c-dark, #d1d5db);
-  transform: translate(10px,10px);
-  z-index:-1;
+  transform: rotate(-45deg);           /* выпрямляем внутренности */
+  transform-style: preserve-3d;  
+  transform: rotateX(55deg) rotateZ(0deg)  rotateY(-45deg);      /* сохраняем 3D для детей */
 }
 
-.avatar-figure{ width:40%; aspect-ratio:1/1; transform: rotate(-45deg); }
-.avatar-figure svg{ width:100%; height:100%; fill:#ffffff; }
+:root {}
+.face{ position:absolute;}
 
-.label{
-  position:absolute; left:50%; transform: translateX(-50%) rotate(-45deg);
-  color:#eaf2ff; text-align:center; font-weight:600; text-shadow:0 1px 2px rgba(0,0,0,.35);
+/* верх — квадрат, приподнят */
+.face.top{
+  width:110px; height:110px;
+  background: var(--c);
+  transform: translateZ(24px) rotateX(0deg);
+  box-shadow: 0 10px 18px rgba(0,0,0,.25);
+  z-index:3;
 }
-.label.top{ top:-46px; width:220px; font-size:12px; line-height:1.15; }
-.label.role{ bottom:-22px; font-size:12px; }
-.label.fio{ bottom:-40px; width:220px; font-size:12px; display:flex; flex-direction:column; gap:2px; }
 
-.center     { --c:var(--tile-center); --c-dark:var(--tile-center-dark); }
-.management { --c:var(--tile-mgmt);   --c-dark:var(--tile-mgmt-dark); }
-.department { --c:var(--tile-dep);    --c-dark:var(--tile-dep-dark); }
-.staff      { --c:var(--tile-staff);  --c-dark:var(--tile-staff-dark); }
+/* левая грань */
+.face.left{
+  width:110px; height:24px;            /* высота «толщины» */
+  background: var(--c-dark);
+  transform-origin: top;
+  transform: rotateX(90deg) translateY( 1px ) translateZ(-67px) rotateY(0deg);
+
+}
+/* правая грань */
+.face.right{
+  width:110px; height:24px;
+  background: var(--c-dark2);
+  transform-origin: top;
+  transform: rotateX(90deg) translateY(0.5px ) translateX( 55px ) translateZ(-12px) rotateY(90deg);
+ 
+}
+/* человек «на крышке» */
+.avatar-figure{
+  position:absolute;
+  left:50%;
+  top:50%;
+  width:80%;
+  transform-style: preserve-3d;
+  /* порядок важен (справа налево): сначала центрируем, затем
+     компенсируем rotateY/rotateX куба, и поднимаем на крышку */
+  transform: translateZ(20px) translateX(-35%) translateY(-72%) rotateY(0deg) rotateZ(0deg) rotateX(-75deg) ;
+  transform-origin: 50% 100%; /* низ фигуры как «ступни» */
+  z-index:4;
+  pointer-events: none;
+}
+.avatar-figure svg{ width:100%; height:100%; fill:#fff; }
+
+/* заголовок (чуть правее и дальше от плитки) */
+.label.top {
+  position: absolute;
+  top: -70px;           /* чуть выше плитки */
+  left: 70%;            /* сдвигаем правее относительно центра */
+  transform: rotate(-45deg);  /* под тот же угол, что и сцена */
+  width: 260px;         /* ширина текста */
+  text-align: left;
+  color: #eaf2ff;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.4;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+
+/* палитра */
+.center     { --c:#ff8746; --c-dark:#cc6b36; --c-dark2:#a7521e; }
+.management { --c:#8b5cf6; --c-dark:#6d28d9; --c-dark2:#5a21b3; }
+.department { --c:#1f3b63; --c-dark:#162a45; --c-dark2:#0d1f36; }
+.staff      { --c:#59d1c7; --c-dark:#2a9e95; --c-dark2:#207a72; }
 </style>

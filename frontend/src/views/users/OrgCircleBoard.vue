@@ -7,20 +7,26 @@
       @mousemove="onMouseMove"
       @mouseup="onMouseUp"
       @mouseleave="onMouseUp"
-      @click.self="clearFocus"           <!-- клик по фону снимает выделение -->
+      @click.self="clearFocus"          
     >
       <div class="content" :style="contentStyle" @click.self="clearFocus">
         <!-- ЛИНИИ -->
-        <svg class="wires" :width="bw" :height="bh">
+       <svg class="wires" :width="bw" :height="bh">
           <g>
             <template v-for="(e, i) in graph.edges" :key="i">
               <line
-                :x1="cx + e.a.x" :y1="cy + e.a.y"
-                :x2="cx + e.b.x" :y2="cy + e.b.y"
-                :class="{ 'hl': isHighlighted(e) }"
+                :x1="cx + e.da.x" :y1="cy + e.da.y"
+                :x2="cx + e.db.x" :y2="cy + e.db.y"
+                vector-effect="non-scaling-stroke"
+                stroke-linecap="round"
+                :class="{ hl: isHighlighted(e) }"
               />
-              <circle :cx="cx + e.a.x" :cy="cy + e.a.y" r="3" :class="{ 'hl': isHighlighted(e) }" />
-              <circle :cx="cx + e.b.x" :cy="cy + e.b.y" r="3" :class="{ 'hl': isHighlighted(e) }" />
+              <circle :cx="cx + e.db.x" :cy="cy + e.db.y" r="4"
+                vector-effect="non-scaling-stroke"
+                :class="{ hl: isHighlighted(e) }"/>
+              <circle :cx="cx + e.da.x" :cy="cy + e.da.y" r="4"
+                vector-effect="non-scaling-stroke"
+                :class="{ hl: isHighlighted(e) }"/>
             </template>
           </g>
         </svg>
@@ -30,7 +36,7 @@
           <CircleBubble
             :title="center.name"
             :subtitle="center.director?.fio || '—'"
-            :role="center.director?.position || 'Директор центра'"
+           
             side="center"
             :dataKey="keyC(center)"
             @focus="focusOn({ key: keyC(center), level: 'center', payload: center })"
@@ -43,7 +49,7 @@
             <CircleBubble
               :title="m.name"
               :subtitle="m.director?.fio || '—'"
-              :role="m.director?.position || 'Директор управления'"
+             
               side="management"
               :dataKey="keyMU(m)"
               @focus="focusOn({ key: keyMU(m), level: 'management', payload: m, ctx: { mi } })"
@@ -55,7 +61,7 @@
               <CircleBubble
                 :title="d.name"
                 :subtitle="d.head?.fio || '—'"
-                :role="d.head?.position || 'Начальник отдела'"
+                
                 side="department"
                 :dataKey="keyDep(d)"
                 @focus="focusOn({ key: keyDep(d), level: 'department', payload: d, ctx: { mi, di, m } })"
@@ -81,28 +87,41 @@
 
     <!-- Карточка информации -->
     <div v-if="infoCard" class="info-panel">
-      <div class="info-title">{{ infoCard.title }}</div>
-      <div class="info-role">{{ infoCard.role }}</div>
-
-      <div class="info-lines">
-        <div class="row" v-for="(ln, i) in infoCard.lines" :key="i">
-          <span class="k">{{ ln.k }}:</span>
-          <span class="v">{{ ln.v }}</span>
-        </div>
-      </div>
-
-      <!-- Дополнительные «сырые» поля (если есть) -->
-      <div v-if="infoCard.extra && infoCard.extra.length" class="info-extra">
-        <div class="extra-title">Дополнительно</div>
-        <div class="row" v-for="(ln, i) in infoCard.extra" :key="'x'+i">
-          <span class="k">{{ ln.k }}:</span>
-          <span class="v">{{ ln.v }}</span>
-        </div>
-      </div>
-
-      <!-- Кнопка закрыть -->
-      <button class="close-btn" @click="clearFocus" title="Скрыть">×</button>
+  <div class="ip-header">
+    <div class="ip-avatar" aria-hidden="true">
+      <svg viewBox="0 0 24 24">
+        <circle cx="12" cy="5" r="3"/>
+        <path d="M4 20a8 8 0 0 1 16 0" />
+      </svg>
     </div>
+
+    <div class="ip-titles">
+      <div class="ip-title">{{ infoCard.title }}</div>
+      <div class="ip-role">{{ infoCard.role }}</div>
+    </div>
+
+    <button class="ip-close" @click="clearFocus" title="Скрыть" aria-label="Скрыть">
+      ✕
+    </button>
+  </div>
+
+  <div class="ip-body">
+    <div class="ip-row" v-for="(ln, i) in infoCard.lines" :key="i">
+      <div class="k">{{ ln.k }}</div>
+      <div class="v">{{ ln.v }}</div>
+    </div>
+  </div>
+
+  <details v-if="infoCard.extra && infoCard.extra.length" class="ip-extra">
+    <summary>Дополнительно</summary>
+    <div class="ip-body">
+      <div class="ip-row" v-for="(ln, i) in infoCard.extra" :key="'x'+i">
+        <div class="k">{{ ln.k }}</div>
+        <div class="v">{{ ln.v }}</div>
+      </div>
+    </div>
+  </details>
+</div>
   </div>
 </template>
 
@@ -115,12 +134,12 @@ export default {
   props: { center: { type: Object, required: true } },
   data() {
     return {
-      gapMgmt: 340,
-      gapDep: 220,
-      gapStaff: 140,
+      gapMgmt: 650,
+      gapDep: 340,
+      gapStaff: 200,
       cx: 0, cy: 0, bw: 0, bh: 0,
-      scale: 1, minScale: 0.4, maxScale: 2.5,
-      tx: 0, ty: 0,
+      scale: 0.5, minScale: 0.1, maxScale: 2.5,
+      tx: 400, ty: 400,
       activeKey: null, infoCard: null,
       isPanning: false, panBtn: 1, lastX: 0, lastY: 0,
     };
@@ -133,28 +152,48 @@ export default {
 
     /* граф: рёбра + родительские связи */
     graph() {
-      const edges = [];
-      const parentOf = {};
-      this.center.managements?.forEach((m, mi) => {
-        const kC = this.keyC(this.center);
-        const kM = this.keyMU(m);
-        edges.push({ a: this.posCenter, b: this.posMU(mi), aKey: kC, bKey: kM });
-        parentOf[kM] = kC;
+  const overdraw = 2  ;
+const extend = (A, B, t = overdraw) => {
+  const dx = B.x - A.x, dy = B.y - A.y;
+  const len = Math.max(1, Math.hypot(dx, dy));
+  const clamped = Math.min(t, (len - 1) / 2); // чтобы не «перевернуть» короткие рёбра
+  const nx = dx / len, ny = dy / len;
+  return {
+    a: { x: A.x - nx * clamped, y: A.y - ny * clamped },
+    b: { x: B.x + nx * clamped, y: B.y + ny * clamped },
+  };
+  };
 
-        m.departments?.forEach((d, di) => {
-          const kD = this.keyDep(d);
-          edges.push({ a: this.posMU(mi), b: this.posDEP(mi, di, m.departments.length), aKey: kM, bKey: kD });
-          parentOf[kD] = kM;
+  const edges = [];
+  const parentOf = {};
 
-          d.staff?.forEach((s, si) => {
-            const kS = this.keyStaff(s);
-            edges.push({ a: this.posDEP(mi, di, m.departments.length), b: this.posSTAFF(mi, di, si, d.staff.length), aKey: kD, bKey: kS });
-            parentOf[kS] = kD;
-          });
-        });
+  this.center.managements?.forEach((m, mi) => {
+    const kC = this.keyC(this.center);
+    const kM = this.keyMU(m);
+    const A = this.posCenter, B = this.posMU(mi);
+    const { a, b } = extend(A, B);
+    edges.push({ a: A, b: B, da: a, db: b, aKey: kC, bKey: kM });
+    parentOf[kM] = kC;
+
+    m.departments?.forEach((d, di) => {
+      const kD = this.keyDep(d);
+      const A2 = this.posMU(mi), B2 = this.posDEP(mi, di, m.departments.length);
+      const { a: a2, b: b2 } = extend(A2, B2);
+      edges.push({ a: A2, b: B2, da: a2, db: b2, aKey: kM, bKey: kD });
+      parentOf[kD] = kM;
+
+      d.staff?.forEach((s, si) => {
+        const kS = this.keyStaff(s);
+        const A3 = this.posDEP(mi, di, m.departments.length), B3 = this.posSTAFF(mi, di, si, d.staff.length);
+        const { a: a3, b: b3 } = extend(A3, B3);
+        edges.push({ a: A3, b: B3, da: a3, db: b3, aKey: kD, bKey: kS });
+        parentOf[kS] = kD;
       });
-      return { edges, parentOf };
-    },
+    });
+  });
+
+  return { edges, parentOf };
+},
 
     /* цепочка подсветки до центра */
     highlighted() {
@@ -347,7 +386,7 @@ export default {
 
 <style scoped>
 .board {
-  position: relative; width: 100%; height: 80vh; min-height: 680px;
+  position: relative; width: 100%; height: 83vh; min-height: 680px;
   background: #2b3441;
   overflow: hidden;
 }
@@ -356,28 +395,116 @@ export default {
 .content { position: absolute; inset: 0; }
 
 /* ЛИНИИ: сплошные. По умолчанию приглушённые, у цепочки — яркие */
-.wires { position:absolute; inset:0; pointer-events:none; }
+.wires { 
+  position:absolute; 
+  inset:0; 
+  pointer-events:none; 
+}
 .wires line { stroke:#8fa3b7; stroke-width:2; stroke-linecap:round; opacity:.55; }
 .wires circle { fill:#8fa3b7; opacity:.55; }
-.wires .hl { opacity:1; stroke:#e9f2ff; fill:#e9f2ff; }
+.wires .hl{
+  opacity: 1;
+  stroke: #ffffff;        /* ярко-белая линия */
+  fill:   #ffffff;
+  stroke-width: 7;      /* толще при подсветке */
+  filter: drop-shadow(0 0 6px rgba(255,255,255,.75)); /* лёгкое свечение */
+}
 
 /* Узлы и состояния: «подъём» активного как параллакс */
 .node { position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); transition: transform .22s ease, opacity .2s ease, filter .2s ease; }
 .node.focused { z-index:20; transform: translate(-50%, -50%) translateY(-80px); filter: drop-shadow(0 18px 36px rgba(0,0,0,.4)); }
-.node.faded { opacity:.32; filter:grayscale(50%); }
+.node.faded { opacity:1; filter:grayscale(80%); }
 
 /* Инфо-панель */
 .info-panel{
-  position:absolute; right:20px; bottom:20px; width:340px;
-  background:#fff; border:1px solid #e2e8f0; border-radius:12px;
-  box-shadow:0 14px 30px rgba(0,0,0,.25); padding:12px 14px 16px; z-index:999;
+  --acc: #8b5cf6;              /* акцент (можешь поменять динамически) */
+  position:absolute;
+  right:20px; bottom:24px;
+  min-width:340px; max-width:420px;
+  padding:12px;
+  border-radius:16px;
+  background: rgba(0, 0, 0, 0.55);     /* стекло на тёмном фоне */
+  backdrop-filter: blur(10px) saturate(120%);
+  border: 1px solid rgba(148, 163, 184, .25);
+  box-shadow: 0 20px 50px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.05);
+  color:#e5ecf5;
+  z-index: 999;
 }
-.info-title{ font-weight:700; font-size:16px; }
-.info-role{ color:#475569; margin-top:2px; }
-.info-lines{ margin-top:8px; display:grid; gap:6px; }
-.info-extra{ margin-top:10px; border-top:1px dashed #e2e8f0; padding-top:8px; }
-.info-lines .row .k, .info-extra .row .k{ color:#64748b; margin-right:6px; }
-.info-lines .row .v, .info-extra .row .v{ font-weight:600; word-break: break-word; }
+/* «хвостик» к узлу */
+.info-panel::after{
+  content:"";
+  position:absolute;
+  bottom:-10px; right:48px;
+  width:18px; height:18px;
+  transform: rotate(45deg);
+  background: inherit;
+  border-bottom: 1px solid rgba(148,163,184,.25);
+  border-right: 1px solid rgba(148,163,184,.25);
+  backdrop-filter: inherit;
+}
+
+/* Header */
+.ip-header{
+  display:flex; align-items:center; gap:10px;
+  padding:8px 8px 10px 8px;
+  border-bottom: 1px dashed rgba(148,163,184,.25);
+}
+.ip-avatar{
+  width:36px; height:36px; border-radius:10px;
+  display:grid; place-items:center;
+  background: radial-gradient(120% 120% at 30% 20%, var(--acc), transparent 70%);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.06);
+}
+.ip-avatar svg{ width:22px; height:22px; fill:#fff; opacity:.95; }
+
+.ip-titles{ flex:1; min-width:0; }
+.ip-title{
+  font-weight:800; letter-spacing:.2px; font-size:15px; line-height:1.2;
+  color:#f8fbff; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+}
+.ip-role{
+  margin-top:2px; font-size:12px; color:#a8b3c6;
+}
+
+.ip-close{
+  border:none; background:transparent; color:#cbd5e1; font-size:18px;
+  width:30px; height:30px; border-radius:8px; cursor:pointer;
+}
+.ip-close:hover{ background:rgba(148,163,184,.12); color:#ffffff; }
+
+/* Body: двухколоночная таблица-список */
+.ip-body{ padding:10px 4px 2px; display:grid; gap:6px; }
+.ip-row{
+  display:grid; grid-template-columns: 120px 1fr; align-items:start;
+  gap:10px; padding:8px 10px;
+  background: linear-gradient(180deg, rgba(255,255,255,.02), rgba(255,255,255,0));
+  border: 1px solid rgba(148,163,184,.12);
+  border-radius:10px;
+}
+.ip-row .k{
+  color:#9fb0c7; font-size:12px; text-transform:uppercase; letter-spacing:.4px;
+}
+.ip-row .v{
+  color:#eef5ff; font-weight:600; word-break:break-word;
+}
+
+/* Extra (collapsible) */
+.ip-extra{
+  margin-top:8px; border-top:1px dashed rgba(148,163,184,.25); padding-top:6px;
+}
+.ip-extra > summary{
+  list-style:none; cursor:pointer; padding:8px 6px; border-radius:8px;
+  color:#cfe1ff; font-weight:700; font-size:13px;
+}
+.ip-extra > summary::-webkit-details-marker{ display:none; }
+.ip-extra[open] > summary{ background:rgba(148,163,184,.08); }
+
+/* Небольшой акцент на hover */
+.ip-row:hover{
+  border-color: rgba(148,163,184,.28);
+  background: linear-gradient(180deg, rgba(255,255,255,.04), rgba(255,255,255,.01));
+}
+
 
 /* Кнопка закрыть */
 .close-btn{
