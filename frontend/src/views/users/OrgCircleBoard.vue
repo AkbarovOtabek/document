@@ -134,6 +134,7 @@ export default {
   props: { center: { type: Object, required: true } },
   data() {
     return {
+      personCache: new Map(),
       gapMgmt: 650,
       gapDep: 340,
       gapStaff: 200,
@@ -149,7 +150,37 @@ export default {
     contentStyle() {
       return { transform: `translate(${this.tx}px, ${this.ty}px) scale(${this.scale})`, transformOrigin: "0 0" };
     },
+peopleIndex() {
+      // Собираем сотрудников по нескольким ключам для удобного поиска
+      const by = new Map();
+      const put = (k, v) => { if (k !== undefined && k !== null && k !== "") by.set(String(k), v); };
 
+      this.center?.managements?.forEach(m => {
+        m?.departments?.forEach(d => {
+          d?.staff?.forEach(s => {
+            put(s.id, s);
+            put(s.username, s);
+            put(s.slug, s);
+            // иногда встречаются person_id / user_id
+            if (s.person_id) put(s.person_id, s);
+            if (s.user_id)   put(s.user_id, s);
+          });
+        });
+        // у управления тоже может быть директор как сотрудник
+        if (m?.director && typeof m.director === 'object') {
+          const s = m.director;
+          put(s.id, s); put(s.username, s); put(s.slug, s);
+        }
+      });
+
+      // директор центра, если пришёл объект
+      if (this.center?.director && typeof this.center.director === 'object') {
+        const s = this.center.director;
+        put(s.id, s); put(s.username, s); put(s.slug, s);
+      }
+
+      return by;
+    },
     /* граф: рёбра + родительские связи */
     graph() {
   const overdraw = 2  ;
@@ -222,7 +253,92 @@ const extend = (A, B, t = overdraw) => {
     keyMU(m) { return `m:${m.id}`; },
     keyDep(d) { return `d:${d.id}`; },
     keyStaff(s) { return `s:${s.id}`; },
+resolvePerson(p) {
+      // если уже объект — возвращаем как есть
+      if (p && typeof p === 'object') return p;
 
+      // иначе ищем по id/username/slug
+      const cand = this.peopleIndex.get(String(p));
+      return cand || null;
+    },
+    async fetchJSON(url) {
+  const r = await fetch(url, { credentials: "include" });
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  return await r.json();
+},
+
+pickKey(p) {
+  if (!p) return null;
+  // выбираем лучший ключ для запроса
+  return p.id ?? p.user_id ?? p.person_id ?? p.username ?? p.slug ?? null;
+},
+
+async fetchPersonRemote(key) {
+  if (!key) return null;
+
+  // 1) пробуем детальный эндпоинт: /api/staff/users/{id}/
+  const tryDetail = async () => {
+    if (/^\d+$/.test(String(key))) {
+      try { return await this.fetchJSON(`/api/staff/users/${key}/`); } catch {}
+    }
+    return null;
+  };
+
+  // 2) пробуем поиск по query: ?id= / ?username= / ?slug=
+  const tryQuery = async () => {
+    const variants = [
+      `?id=${encodeURIComponent(key)}`,
+      `?username=${encodeURIComponent(key)}`,
+      `?slug=${encodeURIComponent(key)}`
+    ];
+    for (const q of variants) {
+      try {
+        const res = await this.fetchJSON(`/api/staff/users/${q}`);
+        // допускаем, что API вернёт {results:[...]} или массив/объект
+        const arr = Array.isArray(res) ? res
+                  : Array.isArray(res?.results) ? res.results
+                  : res ? [res] : [];
+        if (arr.length) return arr[0];
+      } catch {}
+    }
+    return null;
+  };
+
+  return (await tryDetail()) ?? (await tryQuery());
+},
+
+mergePerson(base, extra) {
+  if (!extra) return base;
+  // приоритет у extra, но не затираем осмысленные base пустыми
+  const out = { ...(base || {}) };
+  for (const [k, v] of Object.entries(extra)) {
+    if (v !== undefined && v !== null && v !== "") out[k] = v;
+  }
+  // удобные алиасы
+  out.fio = out.fio || out.full_name || [out.last_name, out.first_name, out.second_name].filter(Boolean).join(" ");
+  return out;
+},
+
+async ensurePerson(p) {
+  // 1) уже объект и в нём есть email/phone/lotus — возвращаем
+  if (p && typeof p === "object" && (p.email || p.phone || p.lotus)) return p;
+
+  // 2) попробуем локальный индекс
+  const idxHit = this.resolvePerson(p);
+  const key = this.pickKey(idxHit || p);
+  if (!key) return idxHit || (typeof p === "object" ? p : null);
+
+  // 3) кэш
+  if (this.personCache.has(String(key))) {
+    return this.mergePerson(idxHit || p, this.personCache.get(String(key)));
+  }
+
+  // 4) запрос в API
+  const remote = await this.fetchPersonRemote(key);
+  if (remote) this.personCache.set(String(key), remote);
+
+  return this.mergePerson(idxHit || p, remote);
+},
     recalcBoard() {
       const box = this.$refs.board.getBoundingClientRect();
       this.cx = box.width / 2; this.cy = box.height / 2;
@@ -257,12 +373,7 @@ const extend = (A, B, t = overdraw) => {
       return parts.length ? parts.join(" ") : s.username || "—";
     },
 
-    /* КЛИК: выбор + формирование полной карточки, без зума */
-    focusOn({ key, level, payload, ctx = {} }) {
-      this.activeKey = key;
-      this.infoCard = this.composeInfo(level, payload, ctx);
-    },
-
+    
     clearFocus() {
       this.activeKey = null;
       this.infoCard = null;
@@ -272,70 +383,123 @@ const extend = (A, B, t = overdraw) => {
     },
 
     /* Формируем «полные» данные */
-    composeInfo(level, payload, ctx) {
-      const lines = [];
-      const extra = [];
+    async focusOn({ key, level, payload, ctx = {} }) {
+  this.activeKey = key;
+  this.infoCard = await this.composeInfo(level, payload, ctx);
+},
+translatePosition(pos) {
+  if (!pos) return "—";
 
-      const push = (k, v) => { if (v !== undefined && v !== null && v !== "") lines.push({ k, v: String(v) }); };
-      const pushExtra = (obj, skip = []) => {
-        if (!obj || typeof obj !== "object") return;
-        const flatKeys = Object.keys(obj).filter(k =>
-          !Array.isArray(obj[k]) && typeof obj[k] !== "object" && !skip.includes(k)
-        );
-        for (const k of flatKeys) extra.push({ k, v: String(obj[k]) });
-      };
+  const map = {
+    director: "Директор",
+    deputy_director: "Заместитель директора (по управлению)",
+    head_of_department: "Начальник отдела",
+    chief_expert: "Главный эксперт",
+    lead_expert: "Ведущий эксперт",
+    expert_l1: "Эксперт первого уровня",
+    employee: "Сотрудник",
+    records_clerk: "Делопроизводитель",
+  };
 
-      if (level === "staff") {
-        const s = payload;
-        push("ФИО", this.fio(s));
-        push("Должность", s.position || "Сотрудник");
-        push("Отдел", this.findDepartmentName(s.department) || ctx?.d?.name || "—");
-        push("Управление", this.findManagementName(s.management) || ctx?.m?.name || "—");
+  const key = String(pos).trim().toLowerCase();
+  return map[key] || pos; // если нет перевода — вернуть как есть
+},
+async composeInfo(level, payload, ctx) {
+  const lines = [];
+  const extra = [];
+  const push = (k, v) => { if (v !== undefined && v !== null && v !== "") lines.push({ k, v: String(v) }); };
+  const pushExtra = (obj, skip = []) => {
+    if (!obj || typeof obj !== "object") return;
+    const keys = Object.keys(obj).filter(k =>
+      !Array.isArray(obj[k]) && typeof obj[k] !== "object" && !skip.includes(k)
+    );
+    for (const k of keys) extra.push({ k, v: String(obj[k]) });
+  };
 
-        // типовые возможные поля
-        push("Email", s.email);
-        push("Телефон", s.phone);
-        push("Логин", s.username);
-        push("ID", s.id);
+  // ---- сотрудник
+  if (level === "staff") {
+    const s = await this.ensurePerson(payload);
+    push("ФИО", this.fio(s));
+   push("Должность", this.translatePosition(s.position) || "Сотрудник");
+    push("Отдел", this.findDepartmentName(s.department) || ctx?.d?.name || "—");
+    push("Управление", this.findManagementName(s.management) || ctx?.m?.name || "—");
+    push("Lotus", s.lotus);
+    push("Email", s.email || s.work_email);
+    push("Телефон", s.phone || s.work_phone);
+    push("Логин", s.username);
 
-        // прочие простые поля сотрудника
-        pushExtra(s, ["id","fio","position","email","phone","username","department","management"]);
+    // скрываем служебное
+    pushExtra(s, ["id","fio","full_name","position","email","work_email","phone","work_phone","username","department","management","slug","role","management_flag","is_active"]);
+    return { title: this.fio(s), role: s.position || "Сотрудник", lines, extra };
+  }
 
-        return { title: this.fio(s), role: s.position || "Сотрудник", lines, extra };
-      }
+  // ---- отдел
+  if (level === "department") {
+    const d = payload;
+    const headRaw = d.head ?? d.head_id ?? d.manager ?? d.manager_id;
+    const head = await this.ensurePerson(headRaw);
 
-      if (level === "department") {
-        const d = payload;
-        push("Отдел", d.name);
-        push("Начальник", d.head?.fio || "—");
-        push("Должность начальника", d.head?.position || "Начальник отдела");
-        push("ID", d.id);
-        pushExtra(d, ["id","name","head","staff","management"]);
-        return { title: d.head?.fio || d.name, role: d.head?.position || "Начальник отдела", lines, extra };
-      }
+    push("Отдел", d.name);
+      const mName =
+    this.findManagementName(d.management) || ctx?.m?.name || "—";
+  push("Управление", mName);
+    push("Начальник", this.fio(head) || "—");
+    push("Должность начальника", this.translatePosition(head?.position) || "Начальник отдела");
+    if (head) {
+      push("Lotus", head.lotus);
+      push("Email", head.email || head.work_email);
+      push("Телефон", head.phone || head.work_phone);
+      push("Логин", head.username);
+      // push("ID начальника", head.id);
+    }
+    // push("ID отдела", d.id);
+    pushExtra(d, ["id","name","head","head_id","management","staff","slug"]);
+    return { title: this.fio(head) || d.name, role: head?.position || "Начальник отдела", lines, extra };
+  }
 
-      if (level === "management") {
-        const m = payload;
-        push("Управление", m.name);
-        push("Директор", m.director?.fio || "—");
-        push("Должность директора", m.director?.position || "Директор управления");
-        push("ID", m.id);
-        pushExtra(m, ["id","name","director","departments"]);
-        return { title: m.director?.fio || m.name, role: m.director?.position || "Директор управления", lines, extra };
-      }
+  // ---- управление
+  if (level === "management") {
+    const m = payload;
+    const dir = await this.ensurePerson(m.director ?? m.director_id);
 
-      if (level === "center") {
-        const c = payload;
-        push("Центр", c.name);
-        push("Директор", c.director?.fio || "—");
-        push("Должность директора", c.director?.position || "Директор центра");
-        push("ID", c.id);
-        pushExtra(c, ["id","name","director","managements"]);
-        return { title: c.director?.fio || c.name, role: c.director?.position || "Директор центра", lines, extra };
-      }
+    push("Управление", m.name);
+    push("Директор", this.fio(dir) || "—");
+    push("Должность директора", this.translatePosition(dir?.position) || "Директор управления");
+    if (dir) {
+      push("Lotus", dir.lotus);
+      push("Email", dir.email || dir.work_email);
+      push("Телефон", dir.phone || dir.work_phone);
+      push("Логин", dir.username);
+      push("ID директора", dir.id);
+    }
+    push("ID управления", m.id);
+    pushExtra(m, ["id","name","director","director_id","departments","slug"]);
+    return { title: this.fio(dir) || m.name, role: dir?.position || "Директор управления", lines, extra };
+  }
 
-      return null;
-    },
+  // ---- центр
+  if (level === "center") {
+    const c = payload;
+    const dir = await this.ensurePerson(c.director ?? c.director_id);
+
+    push("Центр", c.name);
+    push("Директор", this.fio(dir) || "—");
+    push("Должность директора", this.translatePosition(dir?.position) || "Директор центра");
+    if (dir) {
+      push("Lotus", dir.lotus);
+      push("Email", dir.email || dir.work_email);
+      push("Телефон", dir.phone || dir.work_phone);
+      push("Логин", dir.username);
+      push("ID директора", dir.id);
+    }
+    push("ID центра", c.id);
+    pushExtra(c, ["id","name","director","director_id","managements","slug"]);
+    return { title: this.fio(dir) || c.name, role: dir?.position || "Директор центра", lines, extra };
+  }
+
+  return null;
+},
+
 
     findManagementName(m) {
       const id = typeof m === "object" ? m?.id : m;
