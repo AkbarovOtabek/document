@@ -30,10 +30,16 @@ export default {
       return initials || "🏦";
     },
     curator() {
-      // Берём ответственного-куратора: сперва ищем по роли, иначе 1-го
       const list = Array.isArray(this.org?.responsibles) ? this.org.responsibles : [];
-      return list.find(r => String(r.role||"").toLowerCase().includes("куратор"))
-          || list[0] || null;
+      return (
+        list.find((r) =>
+          String(r.role || "")
+            .toLowerCase()
+            .includes("куратор")
+        ) ||
+        list[0] ||
+        null
+      );
     },
   },
   async mounted() {
@@ -60,9 +66,20 @@ export default {
         this.loading = false;
       }
     },
-    goBack() { this.$router.back(); },
-    tel(h) { return h ? `tel:${String(h).replace(/\s+/g, "")}` : "#"; },
-    mail(m) { return m ? `mailto:${m}` : "#"; },
+    goBack() {
+      this.$router.back();
+    },
+    openNode(node) {
+      // обработчик клика по узлу
+      console.log("pick-node:", node);
+      // здесь можешь открыть модал/роут на редактирование
+    },
+    tel(h) {
+      return h ? `tel:${String(h).replace(/\s+/g, "")}` : "#";
+    },
+    mail(m) {
+      return m ? `mailto:${m}` : "#";
+    },
     mapLink(addr) {
       return addr ? `https://maps.google.com/?q=${encodeURIComponent(addr)}` : "#";
     },
@@ -84,7 +101,9 @@ export default {
         <div class="subtitle">
           <span class="pill">{{ org?.category_name || org?.category_slug || "Категория" }}</span>
           <span class="muted">·</span>
-          <span class="muted"><code>{{ org?.slug || slug }}</code></span>
+          <span class="muted"
+            ><code>{{ org?.slug || slug }}</code></span
+          >
         </div>
       </div>
     </header>
@@ -115,7 +134,9 @@ export default {
           <div class="details">
             <div>
               <strong>Адрес</strong>
-              <a :href="mapLink(org.address)" target="_blank" class="muted link">{{ org.address || "—" }}</a>
+              <a :href="mapLink(org.address)" target="_blank" class="muted link">{{
+                org.address || "—"
+              }}</a>
             </div>
             <div>
               <strong>Lotus</strong>
@@ -152,13 +173,17 @@ export default {
 
           <template v-if="curator">
             <div class="resp-item one">
-              <div class="resp-avatar small">{{ (curator.fio || curator.username || "👤")[0] }}</div>
+              <div class="resp-avatar small">
+                {{ (curator.fio || curator.username || "👤")[0] }}
+              </div>
               <div class="resp-info">
                 <div class="resp-name">{{ curator.fio || curator.username }}</div>
                 <div class="resp-sub">
                   <span class="pill small">{{ curator.role || "куратор" }}</span>
                   <span class="dot">•</span>
-                  <span class="muted">{{ curator.can_edit ? "может редактировать" : "только чтение" }}</span>
+                  <span class="muted">{{
+                    curator.can_edit ? "может редактировать" : "только чтение"
+                  }}</span>
                 </div>
                 <div class="resp-contacts">
                   <span class="muted" v-if="curator.phone">☎ {{ curator.phone }}</span>
@@ -172,22 +197,25 @@ export default {
         </div>
       </article>
 
-      <!-- НИЗ: изометрическая оргструктура с панорамированием и зумом -->
+      <!-- НИЗ: визуализация оргструктуры -->
       <article class="card-width span-full">
         <div class="card-inner">
           <div class="structure-head">
             <h3 class="block-title">Оргструктура</h3>
             <div class="muted">
-              {{ Array.isArray(org?.units_tree) ? org.units_tree.length : 0 }} корневых подразделения
+              {{ Array.isArray(org?.units_tree) ? org.units_tree.length : 0 }} корневых
+              подразделения
             </div>
           </div>
 
-          <!-- ВАЖНО: OrgChartFlat уже умеет стиль “как в Users” и панорамирование колесом/средней кнопкой -->
+          <!-- Важно: передаём реальный slug, выключаем credentials (иначе CORS ошибка) -->
           <OrgChartFlat
-            :key="org.updated || org.id"
-            :tree="org.units_tree || []"
-            :org-id="org.id"
-            @saved="fetchDetail"
+            :organization-slug="slug"
+            :include-employees="true"
+            :use-credentials="false"
+            :is-dark="isDark"
+            :lang-r-u="true"
+            @pick-node="openNode"
           />
         </div>
       </article>
@@ -202,7 +230,6 @@ export default {
 </template>
 
 <style scoped>
-/* (стили как у тебя; без изменений, оставляю тут, чтобы было self-contained) */
 .scene {
   --bg: #f6f7fb;
   --panel: #fff;
@@ -230,54 +257,242 @@ export default {
     var(--bg);
 }
 
-.hero { display: grid; min-height: 300px; grid-template-columns: 1.1fr 0.9fr; gap: 18px; align-items: center; padding: 20px 22px 6px; }
-@media (max-width: 980px) { .hero { grid-template-columns: 1fr; } }
-.title { margin: 8px 0 4px; font-size: 32px; line-height: 1.1; }
-.subtitle { display: flex; align-items: center; gap: 10px; }
-.pill { display:inline-flex; align-items:center; height:24px; padding:0 10px; border-radius:999px; background:rgba(25,196,109,.15); color:var(--primary); border:1px solid rgba(25,196,109,.25); font-weight:800; font-size:12px; }
-.pill.small{ height:20px; font-size:11px; }
-.muted { color: var(--muted); }
-.btn { margin-bottom:20px; height:38px; padding:0 12px; border-radius:12px; border:1px solid var(--line); background:transparent; color:var(--ink); font-weight:800; cursor:pointer; }
-
-.grid { display:grid; grid-template-columns: 1.2fr 0.8fr; gap:18px; padding:10px 22px 24px; }
-@media (max-width:980px){ .grid{ grid-template-columns:1fr; } }
-
-.card { perspective: 900px; }
-.card-width { perspective: 1200px; width:100%; }
-.card-width .card-inner, .card .card-inner {
-  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,0)), var(--panel);
-  border:1px solid var(--line); border-radius:18px; padding:16px; transform-style:preserve-3d;
-  transition: transform .22s ease, box-shadow .22s ease; box-shadow:0 18px 38px rgba(0,0,0,.12);
+.hero {
+  display: grid;
+  min-height: 300px;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 18px;
+  align-items: center;
+  padding: 20px 22px 6px;
+}
+@media (max-width: 980px) {
+  .hero {
+    grid-template-columns: 1fr;
+  }
+}
+.title {
+  margin: 8px 0 4px;
+  font-size: 32px;
+  line-height: 1.1;
+}
+.subtitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.pill {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(25, 196, 109, 0.15);
+  color: var(--primary);
+  border: 1px solid rgba(25, 196, 109, 0.25);
+  font-weight: 800;
+  font-size: 12px;
+}
+.pill.small {
+  height: 20px;
+  font-size: 11px;
+}
+.muted {
+  color: var(--muted);
+}
+.btn {
+  margin-bottom: 20px;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
 }
 
-.row.head { display:flex; gap:14px; align-items:center; margin-bottom:8px; }
-.avatar { width:64px; height:64px; border-radius:16px; border:1px solid var(--line); display:grid; place-items:center;
-  background:linear-gradient(180deg, rgba(25,196,109,.18), rgba(25,196,109,.08)); font-weight:900; font-size:20px; color:#fff; text-shadow:0 1px 12px rgba(0,0,0,.25);}
-.avatar img{ width:100%; height:100%; object-fit:cover; border-radius:16px; }
-.info .name { font-size:20px; font-weight:900; margin-bottom:4px; }
-.tags{ display:flex; gap:8px; flex-wrap:wrap; }
-.tag{ display:inline-flex; align-items:center; height:24px; padding:0 10px; border-radius:999px; background:rgba(25,196,109,.15); color:var(--primary); border:1px solid rgba(25,196,109,.25); font-weight:800; font-size:12px; }
-.tag.ghost{ background:transparent; color:var(--muted); border-color:var(--line); }
-.desc{ margin:50px 0 10px; color:var(--muted); }
-.details{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; margin-top:8px; }
-.details .link{ text-decoration:none; }
-.details strong{ display:block; font-size:12px; color:var(--muted); }
-.details span, .details a{ font-size:14px; }
+.grid {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr;
+  gap: 18px;
+  padding: 10px 22px 24px;
+}
+@media (max-width: 980px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
 
-.block-title{ margin:0 0 10px; }
-.resp-item{ display:grid; grid-template-columns:auto 1fr; gap:10px; align-items:flex-start; }
-.resp-avatar{ width:34px; height:34px; border-radius:10px; display:grid; place-items:center; background:rgba(25,196,109,.18); color:#fff; font-weight:900; border:1px solid var(--line); font-size:12px; }
-.resp-info{ display:grid; gap:4px; }
-.resp-name{ font-weight:800; }
-.resp-sub{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
-.dot{ color:var(--muted); }
-.resp-contacts{ display:flex; gap:10px; flex-wrap:wrap; }
-.link{ color: var(--ink); }
+.card {
+  perspective: 900px;
+}
+.card-width {
+  perspective: 1200px;
+  width: 100%;
+}
+.card-width .card-inner,
+.card .card-inner {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0)),
+    var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 16px;
+  transform-style: preserve-3d;
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+  box-shadow: 0 18px 38px rgba(0, 0, 0, 0.12);
+}
 
-.structure-head{ display:flex; justify-content:space-between; align-items:center; gap:12px; }
-.skeleton{ min-height:180px; background: linear-gradient(90deg, rgba(0,0,0,.06), rgba(0,0,0,.02), rgba(0,0,0,.06)); background-size:200% 100%; animation: shimmer 1.2s infinite; }
-@keyframes shimmer { 0%{ background-position:200% 0; } 100%{ background-position:-200% 0; } }
-.span-full{ grid-column:1 / -1; margin-bottom:70px; }
+.row.head {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  background: linear-gradient(180deg, rgba(25, 196, 109, 0.18), rgba(25, 196, 109, 0.08));
+  font-weight: 900;
+  font-size: 20px;
+  color: #fff;
+  text-shadow: 0 1px 12px rgba(0, 0, 0, 0.25);
+}
+.avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 16px;
+}
 
-.error{ color:#ef4444; margin:8px 22px; }
+.info .name {
+  font-size: 20px;
+  font-weight: 900;
+  margin-bottom: 4px;
+}
+.tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 24px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: rgba(25, 196, 109, 0.15);
+  color: var(--primary);
+  border: 1px solid rgba(25, 196, 109, 0.25);
+  font-weight: 800;
+  font-size: 12px;
+}
+.tag.ghost {
+  background: transparent;
+  color: var(--muted);
+  border-color: var(--line);
+}
+
+.desc {
+  margin: 50px 0 10px;
+  color: var(--muted);
+}
+
+.details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+.details .link {
+  text-decoration: none;
+}
+.details strong {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+}
+.details span,
+.details a {
+  font-size: 14px;
+}
+
+.block-title {
+  margin: 0 0 10px;
+}
+.resp-item {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: flex-start;
+}
+.resp-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+  background: rgba(25, 196, 109, 0.18);
+  color: #fff;
+  font-weight: 900;
+  border: 1px solid var(--line);
+  font-size: 12px;
+}
+.resp-info {
+  display: grid;
+  gap: 4px;
+}
+.resp-name {
+  font-weight: 800;
+}
+.resp-sub {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.dot {
+  color: var(--muted);
+}
+.resp-contacts {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.link {
+  color: var(--ink);
+}
+
+.structure-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+.skeleton {
+  min-height: 180px;
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0.06), rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.06));
+  background-size: 200% 100%;
+  animation: shimmer 1.2s infinite;
+}
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+.span-full {
+  grid-column: 1 / -1;
+  margin-bottom: 70px;
+}
+
+.error {
+  color: #ef4444;
+  margin: 8px 22px;
+}
 </style>

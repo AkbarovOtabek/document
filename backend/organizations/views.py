@@ -14,26 +14,6 @@ from organizationsStaff.models import OrgUnit
 from organizationsStaff.serializers import OrgUnitTreeSerializer
 
 
-# class OrganizationViewSet(viewsets.ModelViewSet):
-#     # ... как у вас уже есть ...
-
-#     @action(detail=True, methods=["get"], url_path="structure")
-#     def structure(self, request, *args, **kwargs):
-#         org = self.get_object()
-#         qs = (
-#             OrgUnit.objects
-#             .filter(organization=org, parent__isnull=True)
-#             .prefetch_related(
-#                 "children",
-#                 "children__children",        # слегка хелпит, но глубина может быть произвольной
-#                 "employees",
-#             )
-#             .order_by("order", "name")
-#         )
-#         data = OrgUnitTreeSerializer(qs, many=True, context={"request": request}).data
-#         return Response({"organization": org.slug, "units": data})
-
-
 class CategoryViewSet(
     mixins.ListModelMixin, mixins.RetrieveModelMixin,
     mixins.CreateModelMixin, mixins.UpdateModelMixin,
