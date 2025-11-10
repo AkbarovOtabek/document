@@ -210,7 +210,8 @@ export default {
 
           <!-- Важно: передаём реальный slug, выключаем credentials (иначе CORS ошибка) -->
           <OrgChartFlat
-            :organization-slug="slug"
+            :organization-id="org?.id"
+            :organization-slug="org?.slug || slug"
             :include-employees="true"
             :use-credentials="false"
             :is-dark="isDark"

@@ -1,103 +1,3 @@
-<template>
-  <div class="orgflat" :class="{ dark: isDark }">
-    <!-- ВЕРХНЯЯ ПАНЕЛЬ -->
-    <div class="topbar">
-      <div class="spacer" />
-      <div class="actions">
-        <button class="btn add center" @click="$emit('add-center')">Добавить центр</button>
-        <button class="btn add manage" @click="$emit('add-manage')">Добавить управление</button>
-        <button class="btn add dept" @click="$emit('add-dept')">Добавить отдел</button>
-        <button class="btn add sector" @click="$emit('add-sector')">Добавить сектор/группу</button>
-        <button class="btn add other" @click="$emit('add-other')">Добавить иное</button>
-      </div>
-    </div>
-
-    <!-- ПОЛЕ С ОРГСТРУКТУРОЙ -->
-    <div
-      class="canvas"
-      ref="canvasEl"
-      @mousedown="onPointerDown"
-      @mousemove="onPointerMove"
-      @mouseup="onPointerUp"
-      @mouseleave="onPointerUp"
-      @wheel.prevent="onWheel"
-    >
-      <svg
-        :viewBox="`${view.x} ${view.y} ${view.w} ${view.h}`"
-        xmlns="http://www.w3.org/2000/svg"
-        class="chart"
-      >
-        <defs>
-          <filter id="shadow" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="4" stdDeviation="6" flood-opacity="0.18" />
-          </filter>
-
-          <!-- 🔽 Определяем стрелки (для разных цветов) -->
-          <marker
-            v-for="color in markerColors"
-            :key="color"
-            :id="`arrow-${color.replace('#', '')}`"
-            viewBox="0 0 10 10"
-            refX="10"
-            refY="5"
-            markerWidth="6"
-            markerHeight="6"
-            orient="auto-start-reverse"
-          >
-            <path d="M 0 0 L 10 5 L 0 10 z" :fill="color" />
-          </marker>
-        </defs>
-
-        <!-- СВЯЗИ -->
-        <g class="links">
-          <path
-            v-for="link in links"
-            :key="link.id"
-            :d="link.d"
-            class="edge"
-            :stroke="link.stroke"
-            fill="none"
-            stroke-width="2"
-            opacity="0.8"
-            :marker-end="`url(#arrow-${link.stroke.replace('#', '')})`"
-          />
-        </g>
-
-        <!-- УЗЛЫ -->
-        <g class="nodes">
-          <g
-            v-for="n in laidOutNodes"
-            :key="n.id"
-            class="node"
-            :transform="`translate(${n.x}, ${n.y})`"
-            @click="$emit('pick-node', n.raw)"
-          >
-            <rect
-              :width="NODE_W"
-              :height="NODE_H"
-              rx="14"
-              ry="14"
-              :fill="fillByType(n.raw.type)"
-              filter="url(#shadow)"
-            />
-            <text class="title" :x="NODE_W / 2" :y="22" text-anchor="middle">
-              {{ displayName(n.raw) }}
-            </text>
-            <text class="subtitle" :x="NODE_W / 2" :y="40" text-anchor="middle">
-              {{ displaySubtitle(n.raw) }}
-            </text>
-          </g>
-        </g>
-      </svg>
-
-      <div class="hint">Колесо — масштаб, перетаскивание — панорама</div>
-      <div v-if="_debug" class="debug-badge">
-        {{ _debug.nodes }} узл · {{ _debug.edges }} связ · {{ _debug.roots }} корн
-      </div>
-    </div>
-  </div>
-</template>
-
 <script>
 import axios from "axios";
 import { API_BASE_URL } from "@/API.js";
@@ -106,22 +6,13 @@ export default {
   name: "OrgChartFlat",
   props: {
     organizationSlug: { type: String, default: "" },
-    organizationId: { type: [String, Number], default: null },
+    organizationId:   { type: [String, Number], default: null },
     includeEmployees: { type: Boolean, default: true },
-    useCredentials: { type: Boolean, default: false },
-    isDark: { type: Boolean, default: false },
-    langRU: { type: Boolean, default: true },
+    useCredentials:   { type: Boolean, default: false },
+    isDark:           { type: Boolean, default: false },
+    langRU:           { type: Boolean, default: true },
   },
-  emits: [
-    "add-center",
-    "add-manage",
-    "add-dept",
-    "add-sector",
-    "add-other",
-    "pick-node",
-    "loaded",
-    "error",
-  ],
+  emits: ["add-center","add-manage","add-dept","add-sector","add-other","pick-node","loaded","error"],
   data() {
     return {
       loading: false,
@@ -135,25 +26,20 @@ export default {
       NODE_H: 56,
       GAP_X: 64,
       GAP_Y: 140,
+      _debug: null, // <-- чтобы не было Vue warning
     };
   },
   computed: {
-    /** Цвета стрелок для marker */
-    markerColors() {
-      return ["#ff8a3d", "#7a64ff", "#2a5da0", "#37c2c0", "#7c8aa3"];
-    },
+    markerColors() { return ["#ff8a3d", "#7a64ff", "#2a5da0", "#37c2c0", "#7c8aa3"]; },
     laidOutNodes() {
       const placed = [];
       let cursorX = 0;
-
       const layout = (node, depth, xLeft) => {
         const kids = Array.isArray(node.children) ? node.children : [];
         const w = this.subtreeWidth(node);
         const nodeX = xLeft + w / 2 - this.NODE_W / 2;
         const nodeY = depth * this.GAP_Y;
-
         placed.push({ id: node.id, x: nodeX, y: nodeY, raw: node });
-
         let childX = xLeft;
         for (const ch of kids) {
           const cw = this.subtreeWidth(ch);
@@ -161,7 +47,6 @@ export default {
           childX += cw + this.GAP_X;
         }
       };
-
       for (const r of this.roots) {
         const w = this.subtreeWidth(r);
         layout(r, 0, cursorX);
@@ -169,34 +54,7 @@ export default {
       }
       return placed;
     },
-    links() {
-      const byId = new Map(this.laidOutNodes.map((n) => [n.id, n]));
-      const out = [];
-      const walk = (node) => {
-        const kids = Array.isArray(node.children) ? node.children : [];
-        const p = byId.get(node.id);
-        for (const ch of kids) {
-          const c = byId.get(ch.id);
-          if (p && c) {
-            const x1 = p.x + this.NODE_W / 2;
-            const y1 = p.y + this.NODE_H;
-            const x2 = c.x + this.NODE_W / 2;
-            const y2 = c.y;
-            const mx = (x1 + x2) / 2;
-
-            // плавная кривая вниз со стрелкой
-            out.push({
-              id: `${node.id}->${ch.id}`,
-              d: `M ${x1} ${y1} C ${mx} ${y1 + 40}, ${mx} ${y2 - 40}, ${x2} ${y2}`,
-              stroke: this.strokeByType(ch.type),
-            });
-          }
-          walk(ch);
-        }
-      };
-      this.roots.forEach(walk);
-      return out;
-    },
+  
   },
   mounted() {
     this.fetchData();
@@ -211,23 +69,25 @@ export default {
       this.loading = true;
       this.error = "";
       try {
-        let orgId = this.organizationId;
-        if (!orgId && this.organizationSlug) {
-          const { data } = await axios.get(
-            `${API_BASE_URL}api/organizations/${this.organizationSlug}/`,
-            { withCredentials: this.useCredentials }
-          );
-          orgId = data?.id ?? data?.pk ?? null;
+        const base = `${API_BASE_URL}api/organizations-staff/units/`;
+        const opts = { withCredentials: this.useCredentials };
+
+        let resp = null;
+
+        // 1) если есть organizationId — используем ТОЛЬКО его
+        if (this.organizationId) {
+          resp = await axios.get(base, { params: { organization_id: this.organizationId }, ...opts });
+        } 
+        // 2) если id нет, но есть slug — пробуем по slug (если бэк поддерживает)
+        else if (this.organizationSlug) {
+          resp = await axios.get(base, { params: { organization: this.organizationSlug }, ...opts });
+        } 
+        // 3) иначе — общий список (диагностика; можно удалить)
+        else {
+          resp = await axios.get(base, opts);
         }
 
-        const params = {};
-        if (orgId) params.organization_id = orgId;
-        if (this.organizationSlug && !orgId) params.organization = this.organizationSlug;
-
-        const { data: unitsRaw } = await axios.get(
-          `${API_BASE_URL}api/organizations-staff/units/`,
-          { params, withCredentials: this.useCredentials }
-        );
+        const unitsRaw = resp?.data;
         const units = Array.isArray(unitsRaw?.results)
           ? unitsRaw.results
           : Array.isArray(unitsRaw)
@@ -236,71 +96,111 @@ export default {
 
         this.roots = this.buildTree(units);
         this.$emit("loaded", this.roots);
+
+        const edges = this.roots.reduce((acc, r) => acc + (r.children?.length || 0), 0);
+        this._debug = { nodes: units.length, edges, roots: this.roots.length };
       } catch (e) {
-        this.error = e?.message || "Ошибка загрузки";
+        const msg = e?.response?.data?.detail || e?.response?.statusText || e?.message || "Ошибка загрузки";
+        this.error = `Не удалось загрузить подразделения: ${msg}`;
         this.$emit("error", this.error);
       } finally {
         this.loading = false;
       }
     },
 
-    buildTree(units) {
-      // 1) Достаём parent в любом виде (число/строка/объект)
-      const getParentRaw = (u) => {
-        let p = u.parent_id ?? u.parent ?? u.parentUnit ?? u.parent_unit ?? u.parentId ?? null;
+      buildTree(units) {
+    // 1) Нормализуем записи и режем самоссылки
+    const nodes = units.map(u => {
+      const id = u.id != null ? String(u.id) : null;
+      let parentId = u.parent_id != null ? String(u.parent_id) : null;
 
-        // Если это объект, берём его id/pk/value
-        if (p && typeof p === "object") {
-          p = p.id ?? p.pk ?? p.value ?? null;
-        }
-        return p;
+      // самоссылка -> считаем корнем
+      if (id && parentId && id === parentId) parentId = null;
+
+      return {
+        id,
+        type: this.normalizeType(u.type),
+        name: u.name || (id ? `Unit #${id}` : "Unit"),
+        parent_id: parentId,
+        children: [],
+        order: Number.isFinite(u.order) ? u.order : 0,
+        _raw: u,
       };
+    });
 
-      // 2) Нормализуем узлы: приводим id/parent_id к строкам
-      const nodes = units.map((u) => {
-        const rawParent = getParentRaw(u);
-        const idKey = u.id != null ? String(u.id) : null;
-        const parentKey = rawParent != null && rawParent !== "" ? String(rawParent) : null;
-
-        return {
-          id: idKey,
-          type: this.normalizeType(u.unit_type || u.type),
-          name: u.name_ru || u.name || u.name_uz || (idKey ? `Unit #${idKey}` : "Unit"),
-          position: u.position || u.title || "",
-          parent_id: parentKey,
-          children: [],
-          _raw: u,
-        };
-      });
-
-      // 3) Строим дерево
-      const byId = new Map(nodes.map((n) => [n.id, n]));
-      const roots = [];
-      for (const n of nodes) {
-        if (n.parent_id && byId.has(n.parent_id)) {
-          byId.get(n.parent_id).children.push(n);
-        } else {
-          roots.push(n);
-        }
+    // 2) Собираем дерево
+    const byId = new Map(nodes.map(n => [n.id, n]));
+    const roots = [];
+    for (const n of nodes) {
+      if (n.parent_id && byId.has(n.parent_id) && n.parent_id !== n.id) {
+        byId.get(n.parent_id).children.push(n);
+      } else {
+        roots.push(n);
       }
+    }
 
-      // 4) Отладка: покажем в консоль и на экране
-      const edges = nodes.filter((n) => n.parent_id && byId.has(n.parent_id)).length;
-      console.log(`[OrgChartFlat] nodes=${nodes.length}, edges=${edges}, roots=${roots.length}`);
-      this._debug = { nodes: nodes.length, edges, roots: roots.length };
+    // 3) Сортировка детей для красивого вывода
+    const typeRank = t => ({ center:0, manage:1, dept:2, sector:3, other:4 }[t] ?? 9);
+    const sortRec = (node) => {
+      node.children.sort((a,b) =>
+        (typeRank(a.type) - typeRank(b.type)) ||
+        (a.order - b.order) ||
+        a.name.localeCompare(b.name, "ru"));
+      node.children.forEach(sortRec);
+    };
+    roots.forEach(sortRec);
 
-      return roots;
-    },
+    // для отладочной плашки
+    const edges = nodes.filter(n => n.parent_id && byId.has(n.parent_id) && n.parent_id !== n.id).length;
+    this._debug = { nodes: nodes.length, edges, roots: roots.length };
 
-    normalizeType(t) {
-      if (!t) return "other";
-      t = String(t).toLowerCase();
-      if (["center", "centre", "центр"].includes(t)) return "center";
-      if (["manage", "management", "управление"].includes(t)) return "manage";
-      if (["dept", "department", "отдел"].includes(t)) return "dept";
-      if (["sector", "group", "сектор", "группа"].includes(t)) return "sector";
-      return "other";
-    },
+    return roots;
+  },
+
+  normalizeType(t) {
+    if (!t) return "other";
+    t = String(t).toLowerCase();
+    if (["directorate", "дирекция", "центр", "center", "centre"].includes(t)) return "center";
+    if (["management", "управление", "manage"].includes(t)) return "manage";
+    if (["department", "dept", "отдел"].includes(t)) return "dept";
+    if (["section", "sector", "group", "сектор", "группа"].includes(t)) return "sector";
+    return "other";
+  },
+
+  // Генерация рёбер с защитой от циклов
+  links() {
+    const byId = new Map(this.laidOutNodes.map(n => [n.id, n]));
+    const out = [];
+    const visiting = new Set();
+
+    const walk = (node) => {
+      if (visiting.has(node.id)) return; // защита от цикла
+      visiting.add(node.id);
+
+      const kids = Array.isArray(node.children) ? node.children : [];
+      const p = byId.get(node.id);
+      for (const ch of kids) {
+        const c = byId.get(ch.id);
+        if (p && c) {
+          const x1 = p.x + this.NODE_W / 2;
+          const y1 = p.y + this.NODE_H;
+          const x2 = c.x + this.NODE_W / 2;
+          const y2 = c.y;
+          const mx = (x1 + x2) / 2;
+          out.push({
+            id: `${node.id}->${ch.id}`,
+            d: `M ${x1} ${y1} C ${mx} ${y1 + 40}, ${mx} ${y2 - 40}, ${x2} ${y2}`,
+            stroke: this.strokeByType(ch.type),
+          });
+        }
+        walk(ch);
+      }
+      visiting.delete(node.id);
+    };
+
+    this.roots.forEach(walk);
+    return out;
+  },
     subtreeWidth(node) {
       const kids = node.children || [];
       if (!kids.length) return this.NODE_W;
@@ -308,16 +208,13 @@ export default {
       return Math.max(sum + this.GAP_X * (kids.length - 1), this.NODE_W);
     },
 
-    // Панорамирование и масштаб
     onWheel(e) {
       const rect = this.$refs.canvasEl.getBoundingClientRect();
-      const px = e.clientX - rect.left,
-        py = e.clientY - rect.top;
+      const px = e.clientX - rect.left, py = e.clientY - rect.top;
       const wx = this.view.x + (px / rect.width) * this.view.w;
       const wy = this.view.y + (py / rect.height) * this.view.h;
       const scale = e.deltaY < 0 ? 0.9 : 1.1;
-      const newW = this.view.w * scale,
-        newH = this.view.h * scale;
+      const newW = this.view.w * scale, newH = this.view.h * scale;
       this.view.x = wx - (px / rect.width) * newW;
       this.view.y = wy - (py / rect.height) * newH;
       this.view.w = Math.max(400, Math.min(6000, newW));
@@ -326,7 +223,7 @@ export default {
     onPointerDown(e) {
       this.dragging = true;
       this.dragStart = { x: e.clientX, y: e.clientY };
-      this.viewStart = { x: this.view.x, y: this.view.y };
+      this.viewStart  = { x: this.view.x, y: this.view.y };
     },
     onPointerMove(e) {
       if (!this.dragging) return;
@@ -336,179 +233,115 @@ export default {
       this.view.x = this.viewStart.x - dx;
       this.view.y = this.viewStart.y - dy;
     },
-    onPointerUp() {
-      this.dragging = false;
-    },
-    resizeToContainer() {
-      if (!this.$refs.canvasEl) return;
-      this.view.w = 1600;
-      this.view.h = 900;
-    },
+    onPointerUp() { this.dragging = false; },
 
-    // Вспомогательные функции
-    displayName(n) {
-      return this.langRU ? n.name || "Без названия" : n.name || "Nomsiz";
-    },
+    resizeToContainer() { if (this.$refs.canvasEl) { this.view.w = 1600; this.view.h = 900; } },
+
+    displayName(n) { return this.langRU ? (n.name || "Без названия") : (n.name || "Nomsiz"); },
     displaySubtitle(n) {
-      const base =
-        n.type === "center"
-          ? "Центр"
-          : n.type === "manage"
-          ? "Управление"
-          : n.type === "dept"
-          ? "Отдел"
-          : n.type === "sector"
-          ? "Сектор/группа"
-          : "Иное";
+      const base = n.type === "center" ? "Центр"
+                : n.type === "manage" ? "Управление"
+                : n.type === "dept" ? "Отдел"
+                : n.type === "sector" ? "Сектор/группа"
+                : "Иное";
       return n.position ? `${base} • ${n.position}` : base;
     },
     fillByType(t) {
-      return t === "center"
-        ? "#ff8a3d"
-        : t === "manage"
-        ? "#7a64ff"
-        : t === "dept"
-        ? "#173a6a"
-        : t === "sector"
-        ? "#37c2c0"
-        : "#5a6b84";
+      return t === "center" ? "#ff8a3d"
+           : t === "manage" ? "#7a64ff"
+           : t === "dept"   ? "#173a6a"
+           : t === "sector" ? "#37c2c0"
+           : "#5a6b84";
     },
     strokeByType(t) {
-      return t === "center"
-        ? "#ff8a3d"
-        : t === "manage"
-        ? "#7a64ff"
-        : t === "dept"
-        ? "#2a5da0"
-        : t === "sector"
-        ? "#37c2c0"
-        : "#7c8aa3";
+      return t === "center" ? "#ff8a3d"
+           : t === "manage" ? "#7a64ff"
+           : t === "dept"   ? "#2a5da0"
+           : t === "sector" ? "#37c2c0"
+           : "#7c8aa3";
     },
   },
 };
 </script>
+<template>
+  <div class="orgflat" :class="{ dark: isDark }">
+    <!-- верхняя панель (опционально) -->
+    <div class="topbar">
+      <div />
+      <div class="actions">
+        <button class="btn add center" @click="$emit('add-center')">+ Центр</button>
+        <button class="btn add manage" @click="$emit('add-manage')">+ Управление</button>
+        <button class="btn add dept" @click="$emit('add-dept')">+ Отдел</button>
+        <button class="btn add sector" @click="$emit('add-sector')">+ Сектор/Группа</button>
+        <button class="btn add other" @click="$emit('add-other')">+ Иное</button>
+      </div>
+    </div>
+
+    <!-- холст -->
+    <div class="canvas"
+         ref="canvasEl"
+         @wheel.prevent="onWheel"
+         @mousedown="onPointerDown"
+         @mousemove="onPointerMove"
+         @mouseup="onPointerUp"
+         @mouseleave="onPointerUp">
+      <svg class="chart"
+           :viewBox="`${view.x} ${view.y} ${view.w} ${view.h}`"
+           preserveAspectRatio="xMidYMid meet">
+
+        <!-- рёбра -->
+        <g class="edges">
+          <path v-for="e in links()" :key="e.id"
+                class="edge" :d="e.d" :stroke="e.stroke"
+                fill="none" stroke-width="2"/>
+        </g>
+
+        <!-- узлы -->
+        <g class="nodes">
+          <g v-for="n in laidOutNodes" :key="n.id"
+             class="node"
+             :transform="`translate(${n.x}, ${n.y})`"
+             @click="$emit('pick-node', n.raw)">
+            <rect :width="NODE_W" :height="NODE_H" rx="12" :fill="fillByType(n.raw.type)"/>
+            <text class="title" x="10" y="22">{{ displayName(n.raw) }}</text>
+            <text class="subtitle" x="10" y="40">{{ displaySubtitle(n.raw) }}</text>
+          </g>
+        </g>
+      </svg>
+
+      <div v-if="error" class="error-badge">{{ error }}</div>
+      <div class="hint">Колесо — масштаб, ЛКМ — перетаскивание</div>
+      <div class="debug-badge" v-if="_debug">nodes: {{ _debug.nodes }} · roots: {{ _debug.roots }}</div>
+    </div>
+  </div>
+</template>
+
 
 <style scoped>
-.orgflat {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  height: 100%;
-  color: #17202a;
-}
-.orgflat.dark {
-  color: #e7edf6;
-}
-.topbar {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  align-items: center;
-  padding: 8px 12px;
-}
-.actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.btn {
-  padding: 8px 12px;
-  border-radius: 12px;
-  border: 1px solid transparent;
-  background: #f2f4f8;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.05s, box-shadow 0.2s, background 0.2s;
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
-}
-.btn:hover {
-  transform: translateY(-1px);
-}
-.btn.add.center {
-  background: #ffe8d7;
-  border-color: #ff8a3d33;
-}
-.btn.add.manage {
-  background: #ece8ff;
-  border-color: #7a64ff33;
-}
-.btn.add.dept {
-  background: #e1ebff;
-  border-color: #2a5da033;
-}
-.btn.add.sector {
-  background: #d9f6f5;
-  border-color: #37c2c033;
-}
-.btn.add.other {
-  background: #eef1f6;
-  border-color: #8896a633;
-}
-.canvas {
-  position: relative;
-  flex: 1;
-  background: radial-gradient(1200px 600px at 30% 20%, #3b4654 0%, #2e3844 60%, #26303a 100%);
-  border-radius: 16px;
-  overflow: hidden;
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
-  min-height: 520px;
-}
-.orgflat:not(.dark) .canvas {
-  background: #f7f8fb;
-  box-shadow: inset 0 0 0 1px rgba(16, 24, 40, 0.06);
-}
-.chart {
-  width: 100%;
-  height: 100%;
-  user-select: none;
-  -webkit-user-select: none;
-  display: block;
-}
-.edge {
-  stroke-linecap: round;
-  transition: stroke 0.3s ease;
-}
-.node .title {
-  font-size: 13px;
-  font-weight: 700;
-  fill: #0b1621;
-}
-.node .subtitle {
-  font-size: 11px;
-  fill: #243548;
-  opacity: 0.85;
-}
-.orgflat.dark .node .title,
-.orgflat.dark .node .subtitle {
-  fill: #fff;
-  opacity: 0.92;
-}
-.hint {
-  position: absolute;
-  right: 10px;
-  bottom: 8px;
-  font-size: 12px;
-  opacity: 0.7;
-  background: rgba(0, 0, 0, 0.25);
-  color: #fff;
-  padding: 4px 8px;
-  border-radius: 8px;
-}
-.orgflat:not(.dark) .hint {
-  background: rgba(0, 0, 0, 0.05);
-  color: #3b4654;
-}
-.debug-badge {
-  position: absolute;
-  left: 10px;
-  bottom: 8px;
-  font-size: 12px;
-  background: rgba(0, 0, 0, 0.25);
-  color: #fff;
-  padding: 4px 8px;
-  border-radius: 8px;
-}
-.orgflat:not(.dark) .debug-badge {
-  background: rgba(0, 0, 0, 0.05);
-  color: #3b4654;
-}
+.orgflat { display:flex; flex-direction:column; gap:12px; height:100%; color:#17202a }
+.orgflat.dark { color:#e7edf6 }
+.topbar { display:grid; grid-template-columns:1fr auto; align-items:center; padding:8px 12px }
+.actions { display:flex; gap:8px; flex-wrap:wrap }
+.btn{ padding:8px 12px; border-radius:12px; border:1px solid transparent; background:#f2f4f8; font-weight:600; cursor:pointer; transition:transform .05s, box-shadow .2s, background .2s; box-shadow:0 1px 2px rgba(16,24,40,.06) }
+.btn:hover{ transform:translateY(-1px) }
+.btn.add.center{ background:#ffe8d7; border-color:#ff8a3d33 }
+.btn.add.manage{ background:#ece8ff; border-color:#7a64ff33 }
+.btn.add.dept{ background:#e1ebff; border-color:#2a5da033 }
+.btn.add.sector{ background:#d9f6f5; border-color:#37c2c033 }
+.btn.add.other{ background:#eef1f6; border-color:#8896a633 }
+
+.canvas{ position:relative; flex:1; background:radial-gradient(1200px 600px at 30% 20%, #3b4654 0%, #2e3844 60%, #26303a 100%); border-radius:16px; overflow:hidden; box-shadow:inset 0 0 0 1px rgba(255,255,255,.04); min-height:520px }
+.orgflat:not(.dark) .canvas{ background:#f7f8fb; box-shadow:inset 0 0 0 1px rgba(16,24,40,.06) }
+.chart{ width:100%; height:100%; user-select:none; -webkit-user-select:none; display:block }
+.edge{ stroke-linecap:round; transition:stroke .3s ease }
+.node .title{ font-size:13px; font-weight:700; fill:#0b1621 }
+.node .subtitle{ font-size:11px; fill:#243548; opacity:.85 }
+.orgflat.dark .node .title, .orgflat.dark .node .subtitle{ fill:#fff; opacity:.92 }
+.hint{ position:absolute; right:10px; bottom:8px; font-size:12px; opacity:.7; background:rgba(0,0,0,.25); color:#fff; padding:4px 8px; border-radius:8px }
+.orgflat:not(.dark) .hint{ background:rgba(0,0,0,.05); color:#3b4654 }
+
+.debug-badge{ position:absolute; left:10px; bottom:8px; font-size:12px; background:rgba(0,0,0,.25); color:#fff; padding:4px 8px; border-radius:8px }
+.orgflat:not(.dark) .debug-badge{ background:rgba(0,0,0,.05); color:#3b4654 }
+
+.error-badge{ position:absolute; left:10px; top:10px; font-size:12px; background:#fee2e2; color:#b91c1c; padding:6px 10px; border-radius:8px; border:1px solid #fecaca; max-width:60%; box-shadow:0 8px 18px rgba(0,0,0,.08) }
 </style>

@@ -30,16 +30,40 @@ class OrgEmployeeBriefSerializer(serializers.ModelSerializer):
 
 
 class OrgUnitTreeSerializer(serializers.ModelSerializer):
-    employees = OrgEmployeeBriefSerializer(many=True, read_only=True)
+    parent_id = serializers.SerializerMethodField()
     children = serializers.SerializerMethodField()
 
     class Meta:
         model = OrgUnit
-        fields = ["id", "name", "type", "order", "children", "employees"]
+        fields = [
+            "id",
+            "name",
+            "type",
+            "parent_id",
+            "children",
+        ]
+
+    def get_parent_id(self, obj):
+        return getattr(obj, "parent_id", None)
 
     def get_children(self, obj):
-        kids = obj.children.all().order_by("order", "name")
-        return OrgUnitTreeSerializer(kids, many=True, context=self.context).data
+        # защита от зацикливания + лимит глубины
+        ctx = self.context
+        visited = ctx.setdefault("visited", set())
+        max_depth = ctx.get("max_depth", 20)
+        depth = ctx.setdefault("_depth", 0)
+
+        if obj.pk in visited or depth >= max_depth:
+            return []
+
+        visited.add(obj.pk)
+        try:
+            ctx["_depth"] = depth + 1
+            # thanks to related_name="children"
+            qs = obj.children.all().order_by("order", "name")
+            return OrgUnitTreeSerializer(qs, many=True, context=ctx).data
+        finally:
+            ctx["_depth"] = depth
 
 
 class OrgUnitWriteSerializer(serializers.ModelSerializer):
@@ -48,3 +72,20 @@ class OrgUnitWriteSerializer(serializers.ModelSerializer):
         fields = [
             "id", "organization", "parent", "name", "type", "order"
         ]
+
+
+class OrgUnitFlatSerializer(serializers.ModelSerializer):
+    parent_id = serializers.SerializerMethodField()
+
+    class Meta:
+        model = OrgUnit
+        fields = [
+            "id",
+            "organization",    # это будет ID организации
+            "name",
+            "type",            # одна из: directorate/management/department/section/other
+            "parent_id",       # только ID родителя
+        ]
+
+    def get_parent_id(self, obj):
+        return getattr(obj, "parent_id", None)
