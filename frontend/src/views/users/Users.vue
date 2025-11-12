@@ -8,13 +8,18 @@
       <button class="danger" @click="ui.delUnit = true">Удалить отдел/упр./центр</button>
     </div>
 
-    <!-- <section>
-      <div></div>
-    </section> -->
     <div v-if="loading" class="loader">Загрузка...</div>
 
-    <OrgCircleBoard v-else-if="centerData" :center="centerData" @open-modal="openPerson" />
+    <!-- Схема -->
+    <OrgCircleBoard
+      v-else-if="centerData"
+      :center="centerData"
+      :canEdit="true"
+      @edit-entity="onEditEntity"
+      @open-modal="openPerson"
+    />
 
+    <!-- Просмотр персоны (если используешь) -->
     <PersonModal
       v-if="selectedPerson"
       :person="selectedPerson"
@@ -53,11 +58,25 @@
       @close="ui.delUnit = false"
       @deleted="onSaved"
     />
+    <EditEntityModal
+      v-if="edit.open"
+      :open="edit.open"
+      :level="edit.level"
+      :entity="edit.entity"
+      :ids="edit.ids"
+      :centers="centers"
+      :managements="managements"
+      :departments="departments"
+      @close="edit = { open:false, level:null, entity:null, ids:{} }"
+      @saved="handleEdited"
+    />
   </div>
 </template>
 
 <script>
 import OrgCircleBoard from "./OrgCircleBoard.vue";
+import EditEntityModal from "./EditEntityModal.vue";
+
 import PersonModal from "./PersonModal.vue";
 import AddStructureModal from "./AddStructureModal.vue";
 import AddStaffModal from "./AddStaffModal.vue";
@@ -74,6 +93,7 @@ export default {
     PersonModal,
     AddStructureModal,
     AddStaffModal,
+     EditEntityModal,
     DeleteStaffModal,
     DeleteUnitModal,
   },
@@ -81,16 +101,14 @@ export default {
     return {
       loading: false,
       error: "",
-      // для схемы
       centerData: null,
-      // для селектов в модалках (сырые списки из API)
       centers: [],
       managements: [],
       departments: [],
       staff: [],
-      // UI
       selectedPerson: null,
       ui: { addStruct: false, addStaff: false, delStaff: false, delUnit: false },
+      edit: { open:false, level:null, entity:null, ids:{} },
     };
   },
   async mounted() {
@@ -126,18 +144,20 @@ export default {
           .filter((m) => getId(m.center) === center.id)
           .map((m) => ({
             ...m,
-            director: this.staff.find(
-              (s) => getId(s.management) === m.id && s.position === "deputy_director"
-            ) || { fio: "—", position: "Директор управления" },
+            director:
+              this.staff.find(
+                (s) => getId(s.management) === m.id && s.position === "deputy_director"
+              ) || { fio: "—", position: "Директор управления" },
             departments: [],
           }));
 
         this.departments.forEach((dep) => {
           const m = managementList.find((x) => x.id === getId(dep.management));
           if (m) {
-            const head = this.staff.find(
-              (s) => getId(s.department) === dep.id && s.position === "head_of_department"
-            ) || { fio: "—", position: "Начальник отдела" };
+            const head =
+              this.staff.find(
+                (s) => getId(s.department) === dep.id && s.position === "head_of_department"
+              ) || { fio: "—", position: "Начальник отдела" };
             const employees = this.staff.filter(
               (s) => getId(s.department) === dep.id && s.position !== "head_of_department"
             );
@@ -148,9 +168,10 @@ export default {
         this.centerData = {
           id: center.id,
           name: center.name,
-          director: this.staff.find(
-            (s) => s.position === "director" && (!s.management || !s.department)
-          ) || { fio: "—", position: "Директор центра" },
+          director:
+            this.staff.find(
+              (s) => s.position === "director" && (!s.management || !s.department)
+            ) || { fio: "—", position: "Директор центра" },
           managements: managementList,
         };
       } catch (e) {
@@ -162,7 +183,6 @@ export default {
     },
 
     onSaved() {
-      // общий хук после любых CRUD
       this.ui = { addStruct: false, addStaff: false, delStaff: false, delUnit: false };
       this.loadAll();
     },
@@ -176,6 +196,15 @@ export default {
     deletePerson(p) {
       if (confirm(`Удалить ${p.fio}?`)) alert("Удалён (демо)");
       this.selectedPerson = null;
+    },
+    
+    // обработчик клика по «Редактировать» из OrgCircleBoard
+    onEditEntity({ level, entity, ids, ctx }) {
+      this.edit = { open:true, level, entity, ids: ids || {} };
+    },
+    async handleEdited() {
+      this.edit = { open:false, level:null, entity:null, ids:{} };
+      await this.loadAll();
     },
   },
 };
@@ -208,38 +237,5 @@ export default {
 .actions-bar > button.danger {
   border-color: #fecaca;
   color: #b91c1c;
-}
-
-section {
-  perspective: 900px;
-  padding-bottom:50%;
-}
-section div {
-  position: relative;
-  width: 20%;
-  padding-bottom: 20%;
-  margin: 0 auto;
-  transform-style: preserve-3d;
-  background: #C52329;
-  transform: rotateX(60deg) rotatez(45deg);
-}
-section div:before, div:after {
-  content: '';
-  position: absolute;
- 
-  transform-origin: -2% -2%;
-  background: inherit;
-}
-section div:before {
-   width: 100%;
-  height: 30%;
-  top: 100%; left: -2%;
-  transform: rotateX(-90deg);
-}
-section div:after {
-     width: 30%;
-  height: 100%;
-  top: 0; left: 100%;
-  transform: rotateY(90deg);
 }
 </style>

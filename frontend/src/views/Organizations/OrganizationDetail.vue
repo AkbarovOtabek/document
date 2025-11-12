@@ -200,14 +200,6 @@ export default {
       <!-- НИЗ: визуализация оргструктуры -->
       <article class="card-width span-full">
         <div class="card-inner">
-          <div class="structure-head">
-            <h3 class="block-title">Оргструктура</h3>
-            <div class="muted">
-              {{ Array.isArray(org?.units_tree) ? org.units_tree.length : 0 }} корневых
-              подразделения
-            </div>
-          </div>
-
           <!-- Важно: передаём реальный slug, выключаем credentials (иначе CORS ошибка) -->
           <OrgChartFlat
             :organization-id="org?.id"

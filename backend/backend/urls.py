@@ -6,12 +6,11 @@ from django.conf.urls.static import static
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path("api/token/", TokenObtainPairView.as_view(), name="token_obtain_pair"),
+    path("api/token/refresh/", TokenRefreshView.as_view(), name="token_refresh"),
+
     path('api/', include('organizations.urls', namespace='organizations')),
     path("api/staff/", include("staffUsers.urls", namespace="staffUsers")),
-    path("api/auth/token/", TokenObtainPairView.as_view(),
-         name="token_obtain_pair"),
-    path("api/auth/token/refresh/",
-         TokenRefreshView.as_view(), name="token_refresh"),
     # path("api/org-structure/", include("organizationsStaff.urls",
     #      namespace="organizationsStaff")),
     path('api/organizations-staff/', include(('organizationsStaff.urls',

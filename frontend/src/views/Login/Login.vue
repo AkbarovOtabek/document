@@ -72,7 +72,7 @@
 import axios from "axios";
 import { API_BASE_URL } from "@/API.js";
 
-const TOKEN_URL = `${API_BASE_URL}api/auth/token/`;
+const TOKEN_URL = `${API_BASE_URL}api/token/`;
 
 export default {
   name: "Login",
