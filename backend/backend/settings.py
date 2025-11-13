@@ -19,14 +19,15 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     "django_filters",
     'rest_framework',
     "rest_framework.authtoken",
     "rest_framework_simplejwt",
-    'corsheaders',
     'organizations',
     'staffUsers.apps.StaffusersConfig',
     'organizationsStaff',
+    'external_letters'
 ]
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [

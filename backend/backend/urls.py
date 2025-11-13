@@ -15,6 +15,9 @@ urlpatterns = [
     #      namespace="organizationsStaff")),
     path('api/organizations-staff/', include(('organizationsStaff.urls',
          'organizationsStaff'), namespace='organizationsStaff')),
+
+    path('api/external-letters/', include(('external_letters.urls',
+         'external_letters'), namespace='external_letters')),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL,
