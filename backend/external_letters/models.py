@@ -43,7 +43,8 @@ class ExternalLetter(models.Model):
     title = models.CharField(max_length=200)
     slug = models.SlugField(max_length=220, unique=True, blank=True)
     description = models.TextField(blank=True, default="")
-
+    incoming_date = models.DateField(null=True, blank=True)
+    registration_date = models.DateField(null=True, blank=True)
     # номера: внешний и внутренний
     letter_number = models.CharField(
         "Входящий/Исходящий №", max_length=100, blank=True, default="")

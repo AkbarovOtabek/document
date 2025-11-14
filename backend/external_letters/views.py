@@ -37,7 +37,21 @@ class ExternalLetterViewSet(
     # permission_classes = [permissions.IsAuthenticatedOrReadOnly]
 
     filter_backends = [DjangoFilterBackend, SearchFilter, OrderingFilter]
-    filterset_fields = ['category__slug']       # ? добавь ещё при нужде
-    search_fields = ['title', 'description', 'letter_number',
-                     'internal_letter_number', 'executor', 'category__name']
+    # точные/диапазонные фильтры
+    filterset_fields = {
+        "category__slug": ["exact"],                 # NQQ / MBQ / ...
+        "registration_date": ["gte", "lte"],         # от / до даты регистрации
+        "letter_number": ["exact", "icontains"],     # номер письма
+        "executor": ["icontains"],                   # исполнитель
+        "title": ["icontains"],                      # имя / тема
+        "description": ["icontains"],                # описание
+    }      # ? добавь ещё при нужде
+    search_fields = [
+        "title",
+        "description",
+        "letter_number",
+        "internal_letter_number",
+        "executor",
+        "category__name",
+    ]
     ordering_fields = ['time_create', 'updated', 'title']

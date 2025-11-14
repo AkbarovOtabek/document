@@ -1,35 +1,102 @@
 <script>
+import axios from 'axios'
+import { API_BASE_URL } from '@/API'          // как в остальных компонентах
+
 export default {
   name: 'AddLetterOther',
-  data(){
-    return{
-      form:{
-        system: 'NQQ',          // NQQ | MBQ | OTHER
+  data() {
+    return {
+      categories: [],          // список категорий с backend
+      loadingCategories: false,
+      form: {
+        category_id: '',       // выбранная категория (id)
         number: '',
         name: '',
-        date: '',
+        registration_date: '', // дата регистрации письма
+        incoming_date: '',     // дата прихода письма
         performer: '',
+        internal_letter_number:'',
         description: '',
         files: [],
       },
-      uploading:false
+      uploading: false,
     }
   },
-  methods:{
-    onFiles(e){ this.form.files = Array.from(e.target.files || []) },
-    async submit(){
+  async created() {
+    await this.loadCategories()
+  },
+  methods: {
+    async loadCategories() {
+      this.loadingCategories = true
+      try {
+        const { data } = await axios.get(`${API_BASE_URL}/api/external-letters/categories/`)
+        this.categories = data.results
+
+        // по умолчанию выбираем первую категорию (например NQQ)
+        if (!this.form.category_id && this.categories.length) {
+          this.form.category_id = this.categories[0].id
+        }
+      } catch (e) {
+        console.error('Ошибка загрузки категорий писем', e)
+      } finally {
+        this.loadingCategories = false
+      }
+    },
+
+    onFiles(e) {
+      this.form.files = Array.from(e.target.files || [])
+    },
+
+    async submit() {
+      if (!this.form.category_id) {
+        alert('Выберите систему / категорию')
+        return
+      }
+
       this.uploading = true
-      try{
-        // const fd = new FormData()
-        // Object.entries(this.form).forEach(([k,v]) => k==='files'
-        //   ? v.forEach(f=>fd.append('files',f)) : fd.append(k,v))
-        // await axios.post('/api/docs/create/other', fd)
-        await new Promise(r=>setTimeout(r,500))
+      try {
+        const fd = new FormData()
+
+        // маппинг формы → поля backend
+        fd.append('category_id', this.form.category_id)
+        fd.append('title', this.form.name)                         // заголовок
+        fd.append('description', this.form.description || '')
+        fd.append('letter_number', this.form.number || '')
+        fd.append('internal_letter_number', this.form.internal_letter_number || '')                    // если надо, потом добавим отдельное поле
+        fd.append('executor', this.form.performer || '')
+        fd.append('registration_date', this.form.registration_date || '')
+        fd.append('incoming_date', this.form.incoming_date || '')
+
+        // backend сейчас хранит один файл -> берём первый
+        if (this.form.files[0]) {
+          fd.append('file', this.form.files[0])
+        }
+
+        await axios.post(`${API_BASE_URL}/api/external-letters/letters/`, fd, {
+          headers: { 'Content-Type': 'multipart/form-data' },
+        })
+
         alert('Письмо добавлено (Другие)')
-        this.form = { system:'NQQ', number:'', name:'', date:'', performer:'', description:'', files:[] }
-      }finally{ this.uploading=false }
-    }
-  }
+
+        // сброс формы
+        this.form = {
+          category_id: this.categories[0] ? this.categories[0].id : '',
+          number: '',
+          name: '',
+          registration_date: '',
+          incoming_date: '',
+          internal_letter_number:'',
+          performer: '',
+          description: '',
+          files: [],
+        }
+      } catch (e) {
+        console.error('Ошибка создания письма', e)
+      } finally {
+        this.uploading = false
+      }
+    },
+  },
 }
 </script>
 
@@ -37,20 +104,39 @@ export default {
   <form class="form" @submit.prevent="submit">
     <div class="grid">
       <div class="col">
-        <label>Система</label>
-        <select v-model="form.system">
-          <option value="NQQ">NQQ</option>
-          <option value="MBQ">MBQ</option>
-          <option value="OTHER">Другая</option>
+        <label>Система / Категория</label>
+        <select v-model="form.category_id" :disabled="loadingCategories">
+          <option value="" disabled>Выберите категорию</option>
+          <option
+            v-for="cat in categories"
+            :key="cat.id"
+            :value="cat.id"
+          >
+            <!-- если есть code — показываем его, иначе name/slug -->
+            {{ cat.code || cat.name || cat.slug }}
+          </option>
         </select>
       </div>
+
       <div class="col">
-        <label>Номер</label>
+        <label>Номер письма</label>
         <input v-model.trim="form.number" type="text" required />
       </div>
       <div class="col">
-        <label>Дата</label>
-        <input v-model="form.date" type="date" required />
+        <label>Номер письма регистрации</label>
+        <input v-model.trim="form.internal_letter_number" type="text" required />
+      </div>
+
+      <div class="col">
+        <label>Дата регистрации</label>
+        <input v-model="form.registration_date" type="date" required />
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="col">
+        <label>Дата прихода письма</label>
+        <input v-model="form.incoming_date" type="date" />
       </div>
     </div>
 

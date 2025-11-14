@@ -1,26 +1,15 @@
-from django.urls import path
+# urls.py
+from django.urls import path, include
+from rest_framework.routers import DefaultRouter
 from .views import ExternalLetterViewSet, ExternalLettersCategoryViewSet
 
 app_name = 'external_letters'
 
-# category
-category_list = ExternalLettersCategoryViewSet.as_view({'get': 'list'})
-category_detail = ExternalLettersCategoryViewSet.as_view(
-    {'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'})
-category_create = ExternalLettersCategoryViewSet.as_view({'post': 'create'})
-# letter
-letter_list = ExternalLetterViewSet.as_view({'get': 'list'})
-letter_detail = ExternalLetterViewSet.as_view(
-    {'get': 'retrieve', 'put': 'update', 'patch': 'partial_update', 'delete': 'destroy'})
-letter_create = ExternalLetterViewSet.as_view({'post': 'create'})
+router = DefaultRouter()
+router.register(r'categories', ExternalLettersCategoryViewSet,
+                basename='ext-cat')
+router.register(r'letters', ExternalLetterViewSet, basename='ext-letter')
 
 urlpatterns = [
-    # categories
-    path('categories/list/', category_list, name='category-list'),
-    path('categories/create/', category_create, name='category-create'),
-    path('categories/<slug:slug>/', category_detail, name='category-detail'),
-    # letters
-    path('letters/list/', letter_list, name='letter-list'),
-    path('letters/create/', letter_create, name='letter-create'),
-    path('letters/<slug:slug>/', letter_detail, name='letter-detail'),
+    path('', include(router.urls)),
 ]

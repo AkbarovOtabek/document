@@ -51,6 +51,8 @@ class ExternalLetterSerializer(serializers.ModelSerializer):
 
     # файл письма
     file = serializers.FileField(required=False, allow_null=True)
+    registration_date = serializers.DateField(required=False, allow_null=True)
+    incoming_date = serializers.DateField(required=False, allow_null=True)
 
     class Meta:
         model = ExternalLetter
@@ -65,6 +67,8 @@ class ExternalLetterSerializer(serializers.ModelSerializer):
             "category",
             "category_id",
             "file",
+            "registration_date",
+            "incoming_date",
             "time_create",
             "updated",
         ]
