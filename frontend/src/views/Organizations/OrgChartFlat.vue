@@ -382,8 +382,8 @@ export default {
         newH = this.view.h * scale;
       this.view.x = wx - (px / rect.width) * newW;
       this.view.y = wy - (py / rect.height) * newH;
-      this.view.w = Math.max(400, Math.min(6000, newW));
-      this.view.h = Math.max(300, Math.min(4000, newH));
+      this.view.w = Math.max(400, Math.min(10000, newW));
+      this.view.h = Math.max(300, Math.min(10000, newH));
     },
 
     /* ----------------- Fit / Zoom при старте ----------------- */
@@ -508,7 +508,13 @@ export default {
 .btn.add.primary { background: #e7f1ff; border-color: #3086ff33; }
 .btn.add.secondary { background: #eef7ef; border-color: #38a16933; }
 
-.canvas { position: relative; flex: 1; background: #f7f8fb; border-radius: 16px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(16,24,40,.06); min-height: 520px; touch-action: none; z-index: 1; }
+.canvas { position: relative; 
+  flex: 1; 
+  background: #f7f8fb; 
+  border-radius: 16px; 
+  overflow: hidden; 
+  box-shadow: inset 0 0 0 1px rgba(16,24,40,.06); 
+  min-height: 520px; touch-action: none; z-index: 1; }
 .orgflat.dark .canvas { background: radial-gradient(1200px 600px at 30% 20%, #3b4654 0%, #2e3844 60%, #26303a 100%); box-shadow: inset 0 0 0 1px rgba(255,255,255,.04); }
 
 .chart { cursor: grab; width: 100%; height: 100%; user-select: none; display: block; }

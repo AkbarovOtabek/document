@@ -18,6 +18,8 @@ urlpatterns = [
 
     path('api/external-letters/', include(('external_letters.urls',
          'external_letters'), namespace='external_letters')),
+
+    path('api/cert_documents/', include('cert_documents.urls')),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL,

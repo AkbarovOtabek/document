@@ -413,7 +413,7 @@ h3 {
 
 .cat-btn {
   padding: 6px 12px;
-  border-radius: 999px;
+  border-radius: 9px;
   border: 1px solid #e5e7eb;
   background: #f3f4f6;
   cursor: pointer;
@@ -437,7 +437,7 @@ h3 {
   flex-direction: column;
   gap: 10px;
   padding: 10px;
-  border-radius: 12px;
+  border-radius: 7px;
   border: 1px solid #e5e7eb;
   background: #f9fafb;
 }
@@ -466,7 +466,7 @@ label {
 input {
   height: 36px;
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
+  border-radius: 7px;
   padding: 6px 10px;
 }
 
@@ -480,7 +480,7 @@ input {
 
 .btn {
   padding: 8px 14px;
-  border-radius: 10px;
+  border-radius: 7px;
   border: 1px solid transparent;
   cursor: pointer;
   font-weight: 700;

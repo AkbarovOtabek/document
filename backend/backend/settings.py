@@ -27,7 +27,8 @@ INSTALLED_APPS = [
     'organizations',
     'staffUsers.apps.StaffusersConfig',
     'organizationsStaff',
-    'external_letters'
+    'external_letters',
+    'cert_documents'
 ]
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [

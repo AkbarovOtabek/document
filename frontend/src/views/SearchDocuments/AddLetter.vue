@@ -12,33 +12,96 @@ export default {
 </script>
 
 <template>
-  <div class="wrap">
-    <h3>Добавить письмо</h3>
+  <div class="add-card">
+    <div class="add-header">
+      <div>
+        <div class="add-title">Добавить письмо</div>
+        <div class="add-subtitle">
+          Зарегистрируйте обычное письмо или письмо CERT-CBU
+        </div>
+      </div>
 
-    <div class="tabs">
-      <button class="tab" :class="{active: tab==='other'}" @click="tab='other'">
-        Добавить Другие письма
-      </button>
-      <button class="tab" :class="{active: tab==='cert'}" @click="tab='cert'">
-        Добавить Письмо CERT-CBU
-      </button>
+      <div class="add-tabs">
+        <button
+          class="add-tab"
+          :class="{ active: tab === 'other' }"
+          @click="tab = 'other'"
+        >
+          Другие письма
+        </button>
+        <button
+          class="add-tab"
+          :class="{ active: tab === 'cert' }"
+          @click="tab = 'cert'"
+        >
+          Письмо CERT-CBU
+        </button>
+      </div>
     </div>
 
-    <div class="panel">
-      <AddLetterOther v-if="tab==='other'" />
+    <div class="add-body">
+      <AddLetterOther v-if="tab === 'other'" />
       <AddLetterCertCBU v-else />
     </div>
   </div>
 </template>
 
 <style scoped>
-.wrap{ display:flex; flex-direction:column; gap:12px; }
-h3{ margin:0; }
-.tabs{ display:flex; gap:8px; }
-.tab{
-  padding:8px 12px; border-radius:10px; border:1px solid #e5e7eb;
-  background:#f7f8fb; cursor:pointer; font-weight:700;
+.add-card {
+  width: 100%;
+  border-radius: 7px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  padding: 16px 16px 18px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-.tab.active{ background:#111827; color:#fff; border-color:#111827; }
-.panel{ background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:12px; }
+
+.add-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.add-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: #111827;
+}
+
+.add-subtitle {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+/* табы */
+.add-tabs {
+  display: flex;
+  gap: 8px;
+}
+.add-tab {
+  padding: 7px 14px;
+  border-radius: 9px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #111827;
+  transition: all 0.16s ease;
+}
+.add-tab.active {
+  background: #111827;
+  color: #ffffff;
+  border-color: #111827;
+}
+
+/* тело */
+.add-body {
+  margin-top: 4px;
+}
 </style>

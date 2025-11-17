@@ -1,68 +1,142 @@
 <script>
 import axios from 'axios'
-import { API_BASE_URL } from '@/API' // как в других компонентах
+import { API_BASE_URL } from '@/API'
 
 export default {
   name: 'AddLetterCertCBU',
   data() {
     return {
-      // варианты "куда отправлено" с backend
       destOptions: [],
       loadingDestinations: false,
 
+      orgsByCategory: {},        // { [catId]: { items: [], loading: false } }
+      activeCategoryId: null,
+      selectedCategories: [],
+      selectedOrgIds: [],
+
       form: {
-        system: 'CERT-CBU',      // фиксировано
-
-        // основные реквизиты
-        number: '',              // номер письма
-        date: '',                // дата выхода письма (ручной ввод)
-        subject: '',             // титул / тема письма
-
-        // ответственный
-        performer: '',           // исполнитель письма
-
-        description: '',         // описание / требуемые действия
-
-        // срок письма
-        has_deadline: false,     // есть ли срок письма (checkbox)
-        deadline: '',            // если есть — дата срока
-
-        // индикаторы / IOC
-        indicators: '',          // IOC/ссылки/хэши
-        // получатели (id категорий из /api/categories/list/)
-        sent_to: [],             // куда отправлено (мульти-выбор, массив id)
-
-        // файлы
-        files: [],               // вложения
-
-        // метаданные (кто добавил / кто изменил)
-        created_by: '',          // кто добавил на сайт (заполнит backend)
-        updated_by: '',          // кто изменил данные (заполнит backend)
+        system: 'CERT-CBU',
+        number: '',
+        date: '',
+        subject: '',
+        performer: '',
+        description: '',
+        has_deadline: false,
+        deadline: '',
+        indicators: '',
+        files: [],
+        created_by: '',
+        updated_by: '',
       },
+
       uploading: false,
+      submitStatus: null,
+      submitMessage: '',
     }
   },
+
   async created() {
     await this.loadDestinations()
   },
+
   methods: {
     async loadDestinations() {
       this.loadingDestinations = true
       try {
-        // /api/categories/list/
         const { data } = await axios.get(`${API_BASE_URL}api/categories/list/`)
-
-        // поддержим и пагинацию, и простой список
         const items = Array.isArray(data?.results) ? data.results : data
 
         this.destOptions = (items || []).map(cat => ({
           value: cat.id,
           label: cat.name || cat.title || cat.slug || `Категория #${cat.id}`,
         }))
+
+        if (this.destOptions.length && !this.activeCategoryId) {
+          const firstId = this.destOptions[0].value
+          this.activeCategoryId = firstId
+          if (!this.selectedCategories.includes(firstId)) {
+            this.selectedCategories.push(firstId)
+          }
+          await this.ensureOrgsLoaded(firstId)
+        }
       } catch (e) {
         console.error('Ошибка загрузки категорий (куда отправлено)', e)
       } finally {
         this.loadingDestinations = false
+      }
+    },
+
+    async ensureOrgsLoaded(catId) {
+      const bucket = this.orgsByCategory[catId]
+      if (bucket && (bucket.items?.length || bucket.loading)) return
+
+      this.orgsByCategory[catId] = { items: [], loading: true }
+
+      try {
+        const { data } = await axios.get(
+          `${API_BASE_URL}api/organizations/list/`,
+          { params: { category: catId } }
+        )
+
+        const items = Array.isArray(data?.results) ? data.results : data
+        this.orgsByCategory[catId].items = items || []
+      } catch (e) {
+        console.error('Ошибка загрузки организаций для категории', catId, e)
+        this.orgsByCategory[catId].items = []
+      } finally {
+        this.orgsByCategory[catId].loading = false
+      }
+    },
+
+    async toggleCategory(catId) {
+      const idx = this.selectedCategories.indexOf(catId)
+      if (idx === -1) {
+        this.selectedCategories.push(catId)
+      } else {
+        this.selectedCategories.splice(idx, 1)
+        const bucket = this.orgsByCategory[catId]
+        if (bucket?.items?.length) {
+          const idsToRemove = bucket.items.map(o => o.id)
+          this.selectedOrgIds = this.selectedOrgIds.filter(
+            id => !idsToRemove.includes(id)
+          )
+        }
+      }
+      this.activeCategoryId = catId
+      await this.ensureOrgsLoaded(catId)
+    },
+
+    isCategorySelected(catId) {
+      return this.selectedCategories.includes(catId)
+    },
+
+    isOrgSelected(orgId) {
+      return this.selectedOrgIds.includes(orgId)
+    },
+
+    toggleOrg(orgId) {
+      const idx = this.selectedOrgIds.indexOf(orgId)
+      if (idx === -1) this.selectedOrgIds.push(orgId)
+      else this.selectedOrgIds.splice(idx, 1)
+    },
+
+    toggleSelectAllActive() {
+      const bucket = this.orgsByCategory[this.activeCategoryId]
+      if (!bucket || !bucket.items?.length) return
+
+      const ids = bucket.items.map(o => o.id)
+      const allSelected = ids.every(id => this.selectedOrgIds.includes(id))
+
+      if (allSelected) {
+        this.selectedOrgIds = this.selectedOrgIds.filter(
+          id => !ids.includes(id)
+        )
+      } else {
+        ids.forEach(id => {
+          if (!this.selectedOrgIds.includes(id)) {
+            this.selectedOrgIds.push(id)
+          }
+        })
       }
     },
 
@@ -72,30 +146,36 @@ export default {
 
     async submit() {
       this.uploading = true
+      this.submitStatus = null
+      this.submitMessage = ''
+
       try {
-        // здесь будет реальный запрос к backend cert_documents
-        // const fd = new FormData()
-        //
-        // Object.entries(this.form).forEach(([k, v]) => {
-        //   if (k === 'files') {
-        //     v.forEach(f => fd.append('files', f))
-        //   } else if (k === 'sent_to') {
-        //     // sent_to — массив id категорий
-        //     v.forEach(id => fd.append('sent_to', id))
-        //   } else if (k === 'has_deadline') {
-        //     fd.append('has_deadline', v ? 'true' : 'false')
-        //   } else {
-        //     fd.append(k, v ?? '')
-        //   }
-        // })
-        //
+        const fd = new FormData()
+        fd.append('system', this.form.system)
+        fd.append('number', this.form.number || '')
+        fd.append('date', this.form.date || '')
+        fd.append('subject', this.form.subject || '')
+        fd.append('performer', this.form.performer || '')
+        fd.append('description', this.form.description || '')
+        fd.append('has_deadline', this.form.has_deadline ? 'true' : 'false')
+        fd.append('deadline', this.form.deadline || '')
+        fd.append('indicators', this.form.indicators || '')
+
+        this.selectedCategories.forEach(id =>
+          fd.append('dest_categories', id)
+        )
+        this.selectedOrgIds.forEach(id =>
+          fd.append('dest_organizations', id)
+        )
+        this.form.files.forEach(f => fd.append('files', f))
+
         // await axios.post(`${API_BASE_URL}api/cert-documents/letters/`, fd, {
         //   headers: { 'Content-Type': 'multipart/form-data' },
         // })
-
-        // пока демо:
         await new Promise(r => setTimeout(r, 700))
-        alert('Письмо CERT-CBU добавлено (демо)')
+
+        this.submitStatus = 'success'
+        this.submitMessage = 'Письмо CERT-CBU успешно сохранено.'
 
         this.form = {
           system: 'CERT-CBU',
@@ -107,11 +187,16 @@ export default {
           has_deadline: false,
           deadline: '',
           indicators: '',
-          sent_to: [],
           files: [],
           created_by: '',
           updated_by: '',
         }
+        this.selectedOrgIds = []
+      } catch (e) {
+        console.error('Ошибка сохранения письма CERT-CBU', e)
+        this.submitStatus = 'error'
+        this.submitMessage =
+          'Ошибка при сохранении письма. Проверьте данные и попробуйте ещё раз.'
       } finally {
         this.uploading = false
       }
@@ -121,140 +206,242 @@ export default {
 </script>
 
 <template>
-  <form class="form" @submit.prevent="submit">
-    <!-- Основные реквизиты -->
-    <div class="grid">
-      <div class="col">
-        <label>Система</label>
-        <input type="text" value="CERT-CBU" disabled />
-      </div>
-      <div class="col">
-        <label>Номер письма</label>
-        <input v-model.trim="form.number" type="text" required />
-      </div>
-      <div class="col">
-        <label>Дата выхода письма</label>
-        <input v-model="form.date" type="date" required />
-      </div>
-    </div>
-
-    <div class="row">
-      <label>Тема / титул</label>
-      <input v-model.trim="form.subject" type="text" required />
-    </div>
-
-    <!-- Ответственный и затронутые -->
-    <div class="grid">
-      <div class="col">
-        <label>Исполнитель (ответственный)</label>
-        <input v-model.trim="form.performer" type="text" />
-      </div>
-      <div class="col deadline-col">
-        <label class="deadline-label">
-          <input
-            type="checkbox"
-            v-model="form.has_deadline"
-          />
-          Есть срок письма
-        </label>
-        <input
-          v-model="form.deadline"
-          type="date"
-          :disabled="!form.has_deadline"
-          placeholder="Дата срока"
-        />
-      </div>
-    </div>
-
-    <!-- Куда отправлено (категории с backend) -->
-    <div class="row">
-      <label>Куда отправлено (можно несколько)</label>
-      <select
-        v-model="form.sent_to"
-        multiple
-        :disabled="loadingDestinations || !destOptions.length"
+  <div class="cert-card">
+    <!-- уведомление -->
+    <transition name="fade">
+      <div
+        v-if="submitStatus"
+        class="alert"
+        :class="submitStatus === 'success' ? 'alert-success' : 'alert-error'"
       >
-        <option
-          v-for="opt in destOptions"
-          :key="opt.value"
-          :value="opt.value"
+        {{ submitMessage }}
+      </div>
+    </transition>
+
+    <form class="form" @submit.prevent="submit">
+      <!-- Основные реквизиты -->
+      <div class="grid">
+        <div class="col">
+          <label>Система</label>
+          <div class="pill-system">CERT-CBU</div>
+        </div>
+        <div class="col">
+          <label>Номер письма</label>
+          <input v-model.trim="form.number" type="text" required />
+        </div>
+        <div class="col">
+          <label>Дата выхода письма</label>
+          <input v-model="form.date" type="date" required />
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Тема / титул</label>
+        <input v-model.trim="form.subject" type="text" required />
+      </div>
+
+      <!-- Ответственный + срок -->
+      <div class="grid">
+        <div class="col">
+          <label>Исполнитель (ответственный)</label>
+          <input v-model.trim="form.performer" type="text" />
+        </div>
+        <div class="col deadline-col">
+          <label class="deadline-label">
+            <input type="checkbox" v-model="form.has_deadline" />
+            Есть срок письма
+          </label>
+          <input
+            v-model="form.deadline"
+            type="date"
+            :disabled="!form.has_deadline"
+            placeholder="Дата срока"
+          />
+        </div>
+      </div>
+
+      <!-- Типы организаций -->
+      <div class="row">
+        <label>Куда отправлено (типы организаций)</label>
+        <div class="dest-types">
+          <button
+            v-for="opt in destOptions"
+            :key="opt.value"
+            type="button"
+            class="dest-pill"
+            :class="{ active: isCategorySelected(opt.value) }"
+            @click="toggleCategory(opt.value)"
+          >
+            {{ opt.label }}
+          </button>
+        </div>
+        <small class="hint">
+          Можно выбрать несколько типов организаций. Ниже появятся конкретные
+          организации выбранного типа.
+        </small>
+      </div>
+
+      <!-- Организации активного типа -->
+      <div
+        v-if="activeCategoryId && orgsByCategory[activeCategoryId]"
+        class="org-list-block"
+      >
+        <div class="org-list-head">
+          <div class="org-list-title">
+            Организации:
+            {{
+              destOptions.find(o => o.value === activeCategoryId)?.label ||
+              'Выбранный тип'
+            }}
+          </div>
+          <button
+            type="button"
+            class="btn ghost small"
+            @click="toggleSelectAllActive"
+          >
+            Выделить / снять всех
+          </button>
+        </div>
+
+        <div
+          v-if="orgsByCategory[activeCategoryId].loading"
+          class="org-loading"
         >
-          {{ opt.label }}
-        </option>
-      </select>
-      <small class="hint">
-        Выберите одну или несколько категорий получателей
-        (категории загружаются из /api/categories/list/)
-      </small>
-    </div>
+          Загрузка организаций…
+        </div>
 
-    <!-- Описание / действия -->
-    <div class="row">
-      <label>Описание / Требуемые действия</label>
-      <textarea v-model.trim="form.description" rows="5" />
-    </div>
+        <div
+          v-else-if="orgsByCategory[activeCategoryId].items.length"
+          class="org-chips-wrap"
+        >
+          <label
+            v-for="org in orgsByCategory[activeCategoryId].items"
+            :key="org.id"
+            class="org-chip"
+          >
+            <input
+              type="checkbox"
+              :checked="isOrgSelected(org.id)"
+              @change.stop="toggleOrg(org.id)"
+            />
+            <span class="org-chip-label">
+              {{ org.name || org.title || ('ID ' + org.id) }}
+            </span>
+          </label>
+        </div>
 
-    <!-- IOC -->
-    <div class="row">
-      <label>Индикаторы компрометации (IOC)</label>
-      <textarea
-        v-model.trim="form.indicators"
-        rows="3"
-        placeholder="URL, IP, домены, хэши…"
-      />
-    </div>
-
-    <!-- Файлы -->
-    <div class="row">
-      <label>Файлы</label>
-      <input type="file" multiple @change="onFiles" />
-      <div class="files" v-if="form.files.length">
-        <span v-for="(f, i) in form.files" :key="i" class="chip">
-          {{ f.name }}
-        </span>
+        <div v-else class="org-empty">
+          Для этого типа пока нет организаций.
+        </div>
       </div>
-    </div>
 
-    <!-- Метаданные (кто добавил / кто изменил) – только для отображения -->
-    <div class="grid meta-grid">
-      <div class="col">
-        <label>Кто добавил (устанавливает система)</label>
-        <input
-          v-model="form.created_by"
-          type="text"
-          disabled
-          placeholder="Определяется автоматически"
+      <!-- Описание -->
+      <div class="row">
+        <label>Описание / требуемые действия</label>
+        <textarea v-model.trim="form.description" rows="4" />
+      </div>
+
+      <!-- IOC -->
+      <div class="row">
+        <label>Индикаторы компрометации (IOC)</label>
+        <textarea
+          v-model.trim="form.indicators"
+          rows="3"
+          placeholder="URL, IP, домены, хэши…"
         />
       </div>
-      <div class="col">
-        <label>Кто изменил (устанавливает система)</label>
-        <input
-          v-model="form.updated_by"
-          type="text"
-          disabled
-          placeholder="Определяется автоматически"
-        />
-      </div>
-    </div>
 
-    <div class="actions">
-      <button type="submit" class="btn primary" :disabled="uploading">
-        {{ uploading ? 'Сохранение…' : 'Сохранить' }}
-      </button>
-    </div>
-  </form>
+      <!-- Файлы -->
+      <div class="row">
+        <label>Файлы</label>
+        <input type="file" multiple @change="onFiles" />
+        <div class="files" v-if="form.files.length">
+          <span v-for="(f, i) in form.files" :key="i" class="chip">
+            {{ f.name }}
+          </span>
+        </div>
+      </div>
+
+      <!-- Метаданные -->
+      <div class="grid meta-grid">
+        <div class="col">
+          <label>Кто добавил (устанавливает система)</label>
+          <input
+            v-model="form.created_by"
+            type="text"
+            disabled
+            placeholder="Определяется автоматически"
+          />
+        </div>
+        <div class="col">
+          <label>Кто изменил (устанавливает система)</label>
+          <input
+            v-model="form.updated_by"
+            type="text"
+            disabled
+            placeholder="Определяется автоматически"
+          />
+        </div>
+      </div>
+
+      <div class="actions">
+        <button type="submit" class="btn primary" :disabled="uploading">
+          {{ uploading ? 'Сохранение…' : 'Сохранить' }}
+        </button>
+      </div>
+    </form>
+  </div>
 </template>
 
 <style scoped>
+.cert-card {
+  width: 100%;
+  background: #ffffff;
+  border-radius: 7px;
+  padding: 14px 14px 18px;
+  box-sizing: border-box;
+  border: 1px solid #e5e7eb;
+}
+
+/* уведомление */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.alert {
+  border-radius: 7px;
+  padding: 8px 12px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.alert-success {
+  background: #ecfdf3;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+.alert-error {
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+}
+
+/* форма */
 .form {
   display: flex;
   flex-direction: column;
   gap: 12px;
 }
+
+/* сетка */
 .grid {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 10px;
+  gap: 12px;
 }
 .meta-grid {
   grid-template-columns: 1fr 1fr;
@@ -265,57 +452,58 @@ export default {
   flex-direction: column;
   gap: 6px;
 }
+
+/* подписи */
 label {
-  font-size: 12px;
-  opacity: 0.7;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #9ca3af;
 }
+
+/* inputs/textarea */
 input,
-select,
 textarea {
+  border-radius: 7px;
+  padding: 9px 12px;
+  min-height: 38px;
   border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  padding: 8px 10px;
-  min-height: 36px;
+  background: #f9fafb;
+  color: #111827;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease,
+    background-color 0.16s ease;
 }
-select[multiple] {
-  min-height: 80px;
+input::placeholder,
+textarea::placeholder {
+  color: #9ca3af;
+}
+input:focus,
+textarea:focus {
+  border-color: #22c55e;
+  background-color: #ffffff;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.15);
 }
 textarea {
   resize: vertical;
 }
-.files {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  margin-top: 6px;
-}
-.chip {
-  background: #fff7ed;
-  border: 1px solid #fdba74;
-  color: #9a3412;
-  border-radius: 9999px;
-  padding: 4px 8px;
-  font-size: 12px;
-}
-.actions {
-  display: flex;
-  justify-content: flex-end;
-}
-.btn {
+
+/* бейдж системы */
+.pill-system {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 8px 14px;
-  border-radius: 10px;
-  border: 1px solid transparent;
-  cursor: pointer;
-  font-weight: 700;
+  border-radius: 9px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  font-size: 12px;
+  font-weight: 600;
 }
-.btn.primary {
-  background: #2563eb;
-  color: #fff;
-}
-.hint {
-  font-size: 11px;
-  opacity: 0.6;
-}
+
+/* срок */
 .deadline-col input[type='date'] {
   margin-top: 4px;
 }
@@ -324,6 +512,134 @@ textarea {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  opacity: 0.8;
+  color: #4b5563;
+}
+
+/* типы организаций */
+.dest-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.dest-pill {
+  padding: 6px 12px;
+  border-radius: 9px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  font-size: 12px;
+  cursor: pointer;
+  color: #374151;
+  display: inline-flex;
+  align-items: center;
+  transition: all 0.16s ease;
+}
+.dest-pill.active {
+  background: #ecfdf3;
+  border-color: #4ade80;
+  color: #166534;
+  box-shadow: 0 8px 16px rgba(34, 197, 94, 0.25);
+}
+
+/* организации */
+.org-list-block {
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 7px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+}
+.org-list-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.org-list-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #111827;
+}
+.org-chips-wrap {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.org-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 9px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  font-size: 12px;
+  color: #111827;
+}
+.org-chip input[type='checkbox'] {
+  cursor: pointer;
+}
+.org-chip-label {
+  white-space: nowrap;
+}
+.org-loading,
+.org-empty {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+/* файлы */
+.files {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.chip {
+  background: #f3f4ff;
+  border: 1px solid #e5e7eb;
+  color: #111827;
+  border-radius: 9px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* подсказка */
+.hint {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+/* кнопки */
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.btn {
+  padding: 9px 18px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+}
+.btn.primary {
+  background: linear-gradient(135deg, #22c55e, #16a34a);
+  color: #ffffff;
+  box-shadow: 0 12px 22px rgba(34, 197, 94, 0.35);
+}
+.btn.primary:disabled {
+  opacity: 0.6;
+  cursor: default;
+  box-shadow: none;
+}
+.btn.small {
+  padding: 6px 12px;
+  font-size: 12px;
+}
+.btn.ghost {
+  background: #ffffff;
+  color: #111827;
+  border-color: #e5e7eb;
 }
 </style>
