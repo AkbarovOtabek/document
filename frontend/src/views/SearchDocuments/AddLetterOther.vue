@@ -1,11 +1,18 @@
 <script>
 import axios from 'axios'
 import { API_BASE_URL } from '@/API'
+import AddAnswerLetterForOther from './AddAnswerLetterForOther.vue'
 
 export default {
   name: 'AddLetterOther',
+  components: {
+    AddAnswerLetterForOther,
+  },
   data() {
     return {
+      // режим: create — создать письмо, reply — добавить ответ
+      mode: 'create',
+
       categories: [],
       loadingCategories: false,
       form: {
@@ -116,88 +123,117 @@ export default {
 
 <template>
   <div class="other-card">
-    <transition name="fade">
-      <div
-        v-if="submitStatus"
-        class="alert"
-        :class="submitStatus === 'success' ? 'alert-success' : 'alert-error'"
+    <!-- Табы: создать / добавить ответ -->
+    <div class="tabs">
+      <button
+        type="button"
+        class="tab-btn"
+        :class="{ active: mode === 'create' }"
+        @click="mode = 'create'"
       >
-        {{ submitMessage }}
+        Создать письмо
+      </button>
+      <button
+        type="button"
+        class="tab-btn"
+        :class="{ active: mode === 'reply' }"
+        @click="mode = 'reply'"
+      >
+        Добавить ответное письмо
+      </button>
+    </div>
+
+    <!-- Режим: СОЗДАТЬ ПИСЬМО -->
+    <transition name="fade">
+      <div v-if="mode === 'create'">
+        <transition name="fade">
+          <div
+            v-if="submitStatus"
+            class="alert"
+            :class="submitStatus === 'success' ? 'alert-success' : 'alert-error'"
+          >
+            {{ submitMessage }}
+          </div>
+        </transition>
+
+        <form class="form" @submit.prevent="submit">
+          <div class="grid">
+            <div class="col">
+              <label>Система / Категория</label>
+              <select v-model="form.category_id" :disabled="loadingCategories">
+                <option value="" disabled>Выберите категорию</option>
+                <option
+                  v-for="cat in categories"
+                  :key="cat.id"
+                  :value="cat.id"
+                >
+                  {{ cat.code || cat.name || cat.slug }}
+                </option>
+              </select>
+            </div>
+
+            <div class="col">
+              <label>Номер письма</label>
+              <input v-model.trim="form.number" type="text" required />
+            </div>
+            <div class="col">
+              <label>Номер регистрации</label>
+              <input
+                v-model.trim="form.internal_letter_number"
+                type="text"
+                required
+              />
+            </div>
+          </div>
+
+          <div class="grid">
+            <div class="col">
+              <label>Дата регистрации</label>
+              <input v-model="form.registration_date" type="date" required />
+            </div>
+            <div class="col">
+              <label>Дата прихода письма</label>
+              <input v-model="form.incoming_date" type="date" />
+            </div>
+            <div class="row">
+              <label>Исполнитель</label>
+              <input v-model.trim="form.performer" type="text" />
+            </div>
+          </div>
+
+          <div class="row">
+            <label>Имя / Тема</label>
+            <input v-model.trim="form.name" type="text" required />
+          </div>
+
+          <div class="row">
+            <label>Описание</label>
+            <textarea v-model.trim="form.description" rows="4" />
+          </div>
+
+          <div class="row">
+            <label>Файлы</label>
+            <input type="file" multiple @change="onFiles" />
+            <div class="files" v-if="form.files.length">
+              <span v-for="(f, i) in form.files" :key="i" class="chip">
+                {{ f.name }}
+              </span>
+            </div>
+          </div>
+
+          <div class="actions">
+            <button type="submit" class="btn primary" :disabled="uploading">
+              {{ uploading ? 'Сохранение…' : 'Сохранить' }}
+            </button>
+          </div>
+        </form>
       </div>
     </transition>
 
-    <form class="form" @submit.prevent="submit">
-      <div class="grid">
-        <div class="col">
-          <label>Система / Категория</label>
-          <select v-model="form.category_id" :disabled="loadingCategories">
-            <option value="" disabled>Выберите категорию</option>
-            <option
-              v-for="cat in categories"
-              :key="cat.id"
-              :value="cat.id"
-            >
-              {{ cat.code || cat.name || cat.slug }}
-            </option>
-          </select>
-        </div>
-
-        <div class="col">
-          <label>Номер письма</label>
-          <input v-model.trim="form.number" type="text" required />
-        </div>
-        <div class="col">
-          <label>Номер регистрации</label>
-          <input
-            v-model.trim="form.internal_letter_number"
-            type="text"
-            required
-          />
-        </div>
-      </div>
-
-      <div class="grid">
-        <div class="col">
-          <label>Дата регистрации</label>
-          <input v-model="form.registration_date" type="date" required />
-        </div>
-        <div class="col">
-          <label>Дата прихода письма</label>
-          <input v-model="form.incoming_date" type="date" />
-        </div>
-      </div>
-
-      <div class="row">
-        <label>Имя / Тема</label>
-        <input v-model.trim="form.name" type="text" required />
-      </div>
-
-      <div class="row">
-        <label>Исполнитель</label>
-        <input v-model.trim="form.performer" type="text" />
-      </div>
-
-      <div class="row">
-        <label>Описание</label>
-        <textarea v-model.trim="form.description" rows="4" />
-      </div>
-
-      <div class="row">
-        <label>Файлы</label>
-        <input type="file" multiple @change="onFiles" />
-        <div class="files" v-if="form.files.length">
-          <span v-for="(f, i) in form.files" :key="i" class="chip">
-            {{ f.name }}
-          </span>
-        </div>
-      </div>
-
-      <div class="actions">
-        <button type="submit" class="btn primary" :disabled="uploading">
-          {{ uploading ? 'Сохранение…' : 'Сохранить' }}
-        </button>
-      </div>
-    </form>
+    <!-- Режим: ДОБАВИТЬ ОТВЕТНОЕ ПИСЬМО -->
+    <div v-if="mode === 'reply'" class="reply-wrapper">
+      <AddAnswerLetterForOther />
+    </div>
   </div>
 </template>
 
@@ -209,6 +245,35 @@ export default {
   padding: 14px 14px 18px;
   border: 1px solid #e5e7eb;
   box-sizing: border-box;
+}
+
+/* табы */
+.tabs {
+  display: inline-flex;
+  gap: 6px;
+  background: #f3f4f6;
+  padding: 4px;
+  border-radius: 999px;
+  margin-bottom: 10px;
+}
+.tab-btn {
+  border-radius: 999px;
+  border: 1px solid transparent;
+  padding: 6px 14px;
+  font-size: 13px;
+  cursor: pointer;
+  background: transparent;
+  color: #4b5563;
+}
+.tab-btn.active {
+  background: #ffffff;
+  border-color: #22c55e;
+  color: #065f46;
+  box-shadow: 0 4px 10px rgba(34, 197, 94, 0.25);
+}
+
+.reply-wrapper {
+  margin-top: 4px;
 }
 
 /* уведомления */

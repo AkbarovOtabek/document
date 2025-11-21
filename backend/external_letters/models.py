@@ -45,18 +45,21 @@ class ExternalLetter(models.Model):
     description = models.TextField(blank=True, default="")
     incoming_date = models.DateField(null=True, blank=True)
     registration_date = models.DateField(null=True, blank=True)
+
     # номера: внешний и внутренний
     letter_number = models.CharField(
-        "Входящий/Исходящий №", max_length=100, blank=True, default="")
+        "Входящий/Исходящий №", max_length=100, blank=True, default=""
+    )
     internal_letter_number = models.CharField(
-        "Внутренний №", max_length=100, blank=True, default="")
+        "Внутренний №", max_length=100, blank=True, default=""
+    )
 
     executor = models.CharField(max_length=200, blank=True, default="")
 
     category = models.ForeignKey(
         ExternalLettersCategory,
         related_name="letters",
-        on_delete=models.PROTECT,          # PROTECT, чтобы не удалить категорию с письмами
+        on_delete=models.PROTECT,  # чтобы не удалить категорию с письмами
     )
 
     file = models.FileField(upload_to=letter_upload_to, null=True, blank=True)
@@ -76,8 +79,7 @@ class ExternalLetter(models.Model):
             models.Index(fields=["category"]),
         ]
         constraints = [
-            # При желании можно запретить дубли в рамках категории:
-            # models.UniqueConstraint(fields=["category", "letter_number"], name="uniq_letter_in_category"),
+            # можно добавить UniqueConstraint при необходимости
         ]
 
     def save(self, *args, **kwargs):
@@ -89,3 +91,64 @@ class ExternalLetter(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class ExternalLetterReply(models.Model):
+    """
+    Ответное письмо на входящее внешнее письмо (ExternalLetter)
+    """
+
+    letter = models.ForeignKey(
+        ExternalLetter,
+        on_delete=models.CASCADE,
+        related_name="replies",
+        verbose_name="Исходное входящее письмо",
+    )
+
+    # номер ответного письма
+    reply_number = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name="Номер ответного письма",
+    )
+
+    # внутренний номер (если есть)
+    internal_number = models.CharField(
+        max_length=100,
+        blank=True,
+        default="",
+        verbose_name="Внутренний номер",
+    )
+
+    # дата отправки письма от вашей организации
+    sent_date = models.DateField(
+        null=True,
+        blank=True,
+        verbose_name="Дата отправки",
+    )
+
+    # файл ответа
+    file = models.FileField(
+        upload_to="external_letters/replies/",
+        verbose_name="Файл ответного письма",
+    )
+
+    # кто добавил
+    added_by = models.ForeignKey(
+        "auth.User",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="external_letter_replies_added",
+    )
+
+    added_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Ответное письмо"
+        verbose_name_plural = "Ответные письма"
+        ordering = ("-sent_date", "-id")
+
+    def __str__(self):
+        return f"Ответ на {self.letter.letter_number or self.letter.title}"

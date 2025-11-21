@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from django.utils.text import slugify
-from .models import ExternalLetter, ExternalLettersCategory
+from .models import ExternalLetter, ExternalLettersCategory, ExternalLetterReply
 
 
 def unique_slugify(model, base_slug):
@@ -14,7 +14,7 @@ def unique_slugify(model, base_slug):
 
 
 class ExternalLettersCategorySerializer(serializers.ModelSerializer):
-    # считать количество писем в этой категории
+    # количество писем в категории
     objects_count = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
@@ -24,11 +24,9 @@ class ExternalLettersCategorySerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "slug", "time_create", "objects_count"]
 
     def get_objects_count(self, obj):
-        # related_name='letters' в модели категории
         return obj.letters.count()
 
     def create(self, validated_data):
-        # если slug не прислали — генерируем из name
         if not validated_data.get("slug"):
             validated_data["slug"] = unique_slugify(
                 ExternalLettersCategory, validated_data.get("name", "")
@@ -36,23 +34,66 @@ class ExternalLettersCategorySerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        # slug не трогаем при апдейте (обычно фиксируем)
         validated_data.pop("slug", None)
         return super().update(instance, validated_data)
+
+
+class ExternalLetterReplySerializer(serializers.ModelSerializer):
+    # для записи используем letter_id, для чтения достаточно pk письма
+    letter_id = serializers.PrimaryKeyRelatedField(
+        queryset=ExternalLetter.objects.all(),
+        source="letter",
+        write_only=True,
+    )
+    letter = serializers.PrimaryKeyRelatedField(read_only=True)
+
+    added_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = ExternalLetterReply
+        fields = [
+            "id",
+            "letter",
+            "letter_id",
+            "reply_number",
+            "internal_number",
+            "sent_date",
+            "file",
+            "added_by",
+            "added_by_name",
+            "added_at",
+        ]
+        read_only_fields = ["added_by", "added_at"]
+
+    def get_added_by_name(self, obj):
+        u = obj.added_by
+        if not u:
+            return None
+        return u.get_full_name() or u.username
+
+    def create(self, validated_data):
+        request = self.context.get("request")
+        if request and request.user.is_authenticated:
+            validated_data["added_by"] = request.user
+        return super().create(validated_data)
 
 
 class ExternalLetterSerializer(serializers.ModelSerializer):
     # писать будем через category_id...
     category_id = serializers.PrimaryKeyRelatedField(
-        queryset=ExternalLettersCategory.objects.all(), source="category", write_only=True
+        queryset=ExternalLettersCategory.objects.all(),
+        source="category",
+        write_only=True,
     )
-    # ...а читать удобно через вложенный объект
+    # ...а читать — через вложенную категорию
     category = ExternalLettersCategorySerializer(read_only=True)
 
-    # файл письма
     file = serializers.FileField(required=False, allow_null=True)
     registration_date = serializers.DateField(required=False, allow_null=True)
     incoming_date = serializers.DateField(required=False, allow_null=True)
+
+    # вложенный список ответных писем
+    replies = ExternalLetterReplySerializer(many=True, read_only=True)
 
     class Meta:
         model = ExternalLetter
@@ -71,6 +112,7 @@ class ExternalLetterSerializer(serializers.ModelSerializer):
             "incoming_date",
             "time_create",
             "updated",
+            "replies",  # <<< важно
         ]
         read_only_fields = ["id", "slug", "time_create", "updated"]
 
@@ -82,6 +124,5 @@ class ExternalLetterSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
     def update(self, instance, validated_data):
-        # не даём менять slug на PATCH/PUT
         validated_data.pop("slug", None)
         return super().update(instance, validated_data)

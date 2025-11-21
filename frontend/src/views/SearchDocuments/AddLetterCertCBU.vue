@@ -1,11 +1,22 @@
 <script>
 import axios from 'axios'
 import { API_BASE_URL } from '@/API'
+import AddAnswerLetterForCertCBU from './AddAnswerLetterForCertCBU.vue'
+
+const EMPLOYEES_URL = `${API_BASE_URL}api/staff/users/`
 
 export default {
   name: 'AddLetterCertCBU',
+
+  components: {
+    AddAnswerLetterForCertCBU,
+  },
+
   data() {
     return {
+      // режим: создание письма или добавление ответа
+      mode: 'create', // 'create' | 'reply'
+
       destOptions: [],
       loadingDestinations: false,
 
@@ -14,16 +25,20 @@ export default {
       selectedCategories: [],
       selectedOrgIds: [],
 
+      // сотрудники
+      employees: [],
+      loadingEmployees: false,
+      employeeSearch: '',
+
       form: {
         system: 'CERT-CBU',
         number: '',
         date: '',
         subject: '',
-        performer: '',
+        performer: '',     // ID сотрудника
         description: '',
         has_deadline: false,
         deadline: '',
-        indicators: '',
         files: [],
         created_by: '',
         updated_by: '',
@@ -36,10 +51,54 @@ export default {
   },
 
   async created() {
-    await this.loadDestinations()
+    await Promise.all([
+      this.loadDestinations(),
+      this.loadEmployees(),
+    ])
+  },
+
+  computed: {
+    filteredEmployees() {
+      const q = this.employeeSearch.trim().toLowerCase()
+      if (!q) return this.employees
+
+      return (this.employees || []).filter(u => {
+        const fio = (u.fio || u.full_name || '').toLowerCase()
+        const username = (u.username || '').toLowerCase()
+        const email = (u.email || '').toLowerCase()
+        return (
+          fio.includes(q) ||
+          username.includes(q) ||
+          email.includes(q)
+        )
+      })
+    },
   },
 
   methods: {
+    // будет вызываться из компонента добавления ответа (если нужно)
+    onReplyCreated() {
+      // тут можно показать тост, обновить список и т.п.
+      console.log('Ответное письмо успешно добавлено')
+    },
+
+    // ===== сотрудники =====
+    async loadEmployees() {
+      this.loadingEmployees = true
+      try {
+        const { data } = await axios.get(EMPLOYEES_URL, {
+          params: { is_active: true },
+        })
+        this.employees = Array.isArray(data) ? data : (data?.results || [])
+      } catch (e) {
+        console.error('Ошибка загрузки сотрудников', e)
+        this.employees = []
+      } finally {
+        this.loadingEmployees = false
+      }
+    },
+
+    // ===== категории / организации =====
     async loadDestinations() {
       this.loadingDestinations = true
       try {
@@ -155,11 +214,10 @@ export default {
         fd.append('number', this.form.number || '')
         fd.append('date', this.form.date || '')
         fd.append('subject', this.form.subject || '')
-        fd.append('performer', this.form.performer || '')
+        fd.append('performer', this.form.performer || '')  // ID сотрудника
         fd.append('description', this.form.description || '')
         fd.append('has_deadline', this.form.has_deadline ? 'true' : 'false')
         fd.append('deadline', this.form.deadline || '')
-        fd.append('indicators', this.form.indicators || '')
 
         this.selectedCategories.forEach(id =>
           fd.append('dest_categories', id)
@@ -169,14 +227,16 @@ export default {
         )
         this.form.files.forEach(f => fd.append('files', f))
 
-        // await axios.post(`${API_BASE_URL}api/cert-documents/letters/`, fd, {
-        //   headers: { 'Content-Type': 'multipart/form-data' },
-        // })
-        await new Promise(r => setTimeout(r, 700))
+        await axios.post(
+          `${API_BASE_URL}api/cert-documents/letters/`,
+          fd,
+          { headers: { 'Content-Type': 'multipart/form-data' } },
+        )
 
         this.submitStatus = 'success'
         this.submitMessage = 'Письмо CERT-CBU успешно сохранено.'
 
+        // сброс формы
         this.form = {
           system: 'CERT-CBU',
           number: '',
@@ -186,7 +246,6 @@ export default {
           description: '',
           has_deadline: false,
           deadline: '',
-          indicators: '',
           files: [],
           created_by: '',
           updated_by: '',
@@ -207,189 +266,205 @@ export default {
 
 <template>
   <div class="cert-card">
-    <!-- уведомление -->
-    <transition name="fade">
-      <div
-        v-if="submitStatus"
-        class="alert"
-        :class="submitStatus === 'success' ? 'alert-success' : 'alert-error'"
+    <!-- ТАБЫ: Создание / Добавление ответа -->
+    <div class="tabs">
+      <button
+        type="button"
+        class="tab-btn"
+        :class="{ active: mode === 'create' }"
+        @click="mode = 'create'"
       >
-        {{ submitMessage }}
-      </div>
-    </transition>
-
-    <form class="form" @submit.prevent="submit">
-      <!-- Основные реквизиты -->
-      <div class="grid">
-        <div class="col">
-          <label>Система</label>
-          <div class="pill-system">CERT-CBU</div>
-        </div>
-        <div class="col">
-          <label>Номер письма</label>
-          <input v-model.trim="form.number" type="text" required />
-        </div>
-        <div class="col">
-          <label>Дата выхода письма</label>
-          <input v-model="form.date" type="date" required />
-        </div>
-      </div>
-
-      <div class="row">
-        <label>Тема / титул</label>
-        <input v-model.trim="form.subject" type="text" required />
-      </div>
-
-      <!-- Ответственный + срок -->
-      <div class="grid">
-        <div class="col">
-          <label>Исполнитель (ответственный)</label>
-          <input v-model.trim="form.performer" type="text" />
-        </div>
-        <div class="col deadline-col">
-          <label class="deadline-label">
-            <input type="checkbox" v-model="form.has_deadline" />
-            Есть срок письма
-          </label>
-          <input
-            v-model="form.deadline"
-            type="date"
-            :disabled="!form.has_deadline"
-            placeholder="Дата срока"
-          />
-        </div>
-      </div>
-
-      <!-- Типы организаций -->
-      <div class="row">
-        <label>Куда отправлено (типы организаций)</label>
-        <div class="dest-types">
-          <button
-            v-for="opt in destOptions"
-            :key="opt.value"
-            type="button"
-            class="dest-pill"
-            :class="{ active: isCategorySelected(opt.value) }"
-            @click="toggleCategory(opt.value)"
-          >
-            {{ opt.label }}
-          </button>
-        </div>
-        <small class="hint">
-          Можно выбрать несколько типов организаций. Ниже появятся конкретные
-          организации выбранного типа.
-        </small>
-      </div>
-
-      <!-- Организации активного типа -->
-      <div
-        v-if="activeCategoryId && orgsByCategory[activeCategoryId]"
-        class="org-list-block"
+        Создание
+      </button>
+      <button
+        type="button"
+        class="tab-btn"
+        :class="{ active: mode === 'reply' }"
+        @click="mode = 'reply'"
       >
-        <div class="org-list-head">
-          <div class="org-list-title">
-            Организации:
-            {{
-              destOptions.find(o => o.value === activeCategoryId)?.label ||
-              'Выбранный тип'
-            }}
+        Добавление ответа на письмо
+      </button>
+    </div>
+
+    <!-- РЕЖИМ: СОЗДАНИЕ ПИСЬМА -->
+    <div v-if="mode === 'create'">
+      <!-- уведомление -->
+      <transition name="fade">
+        <div
+          v-if="submitStatus"
+          class="alert"
+          :class="submitStatus === 'success' ? 'alert-success' : 'alert-error'"
+        >
+          {{ submitMessage }}
+        </div>
+      </transition>
+
+      <form class="form" @submit.prevent="submit">
+        <!-- Основные реквизиты -->
+        <div class="grid">
+          <div class="col">
+            <label>Номер письма</label>
+            <input v-model.trim="form.number" type="text" required />
           </div>
-          <button
-            type="button"
-            class="btn ghost small"
-            @click="toggleSelectAllActive"
+          <div class="col">
+            <label>Дата выхода письма</label>
+            <input v-model="form.date" type="date" required />
+          </div>
+          <!-- Файлы -->
+          <div class="row">
+            <label>Файлы</label>
+            <input type="file" multiple @change="onFiles" />
+            <div class="files" v-if="form.files.length">
+              <span v-for="(f, i) in form.files" :key="i" class="chip">
+                {{ f.name }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="row">
+          <label>Тема / титул</label>
+          <input v-model.trim="form.subject" type="text" required />
+        </div>
+
+        <!-- Ответственный + срок -->
+        <div class="grid">
+          <div class="col">
+            <label>Исполнитель (ответственный)</label>
+            <!-- фильтр по сотрудникам -->
+            <input
+              v-model.trim="employeeSearch"
+              type="text"
+              placeholder="Поиск по ФИО / username / email"
+            />
+            <!-- выбор исполнителя -->
+            <select v-model="form.performer">
+              <option value="">Выберите исполнителя</option>
+              <option
+                v-for="u in filteredEmployees"
+                :key="u.id"
+                :value="u.id"
+              >
+                {{ u.fio || u.full_name || u.username || u.email || ('ID ' + u.id) }}
+              </option>
+            </select>
+            <small class="hint" v-if="loadingEmployees">
+              Загрузка списка сотрудников…
+            </small>
+            <small
+              class="hint"
+              v-else-if="!loadingEmployees && !filteredEmployees.length"
+            >
+              Сотрудники не найдены
+            </small>
+          </div>
+          <div class="col deadline-col">
+            <label class="deadline-label">
+              <input type="checkbox" v-model="form.has_deadline" />
+              Есть срок письма
+            </label>
+            <input
+              v-model="form.deadline"
+              type="date"
+              :disabled="!form.has_deadline"
+              placeholder="Дата срока"
+            />
+          </div>
+        </div>
+
+        <!-- Типы организаций -->
+        <div class="row">
+          <label>Куда отправлено (типы организаций)</label>
+          <div class="dest-types">
+            <button
+              v-for="opt in destOptions"
+              :key="opt.value"
+              type="button"
+              class="dest-pill"
+              :class="{ active: isCategorySelected(opt.value) }"
+              @click="toggleCategory(opt.value)"
+            >
+              {{ opt.label }}
+            </button>
+          </div>
+          <small class="hint">
+            Можно выбрать несколько типов организаций. Ниже появятся конкретные
+            организации выбранного типа.
+          </small>
+        </div>
+
+        <!-- Организации активного типа -->
+        <div
+          v-if="activeCategoryId && orgsByCategory[activeCategoryId]"
+          class="org-list-block"
+        >
+          <div class="org-list-head">
+            <div class="org-list-title">
+              Организации:
+              {{
+                destOptions.find(o => o.value === activeCategoryId)?.label ||
+                'Выбранный тип'
+              }}
+            </div>
+            <button
+              type="button"
+              class="btn ghost small"
+              @click="toggleSelectAllActive"
+            >
+              Выделить / снять всех
+            </button>
+          </div>
+
+          <div
+            v-if="orgsByCategory[activeCategoryId].loading"
+            class="org-loading"
           >
-            Выделить / снять всех
+            Загрузка организаций…
+          </div>
+
+          <div
+            v-else-if="orgsByCategory[activeCategoryId].items.length"
+            class="org-chips-wrap"
+          >
+            <label
+              v-for="org in orgsByCategory[activeCategoryId].items"
+              :key="org.id"
+              class="org-chip"
+            >
+              <input
+                type="checkbox"
+                :checked="isOrgSelected(org.id)"
+                @change.stop="toggleOrg(org.id)"
+              />
+              <span class="org-chip-label">
+                {{ org.name || org.title || ('ID ' + org.id) }}
+              </span>
+            </label>
+          </div>
+
+          <div v-else class="org-empty">
+            Для этого типа пока нет организаций.
+          </div>
+        </div>
+
+        <!-- Описание -->
+        <div class="row">
+          <label>Описание / требуемые действия</label>
+          <textarea v-model.trim="form.description" rows="4" />
+        </div>
+
+        <div class="actions">
+          <button type="submit" class="btn primary" :disabled="uploading">
+            {{ uploading ? 'Сохранение…' : 'Сохранить' }}
           </button>
         </div>
+      </form>
+    </div>
 
-        <div
-          v-if="orgsByCategory[activeCategoryId].loading"
-          class="org-loading"
-        >
-          Загрузка организаций…
-        </div>
-
-        <div
-          v-else-if="orgsByCategory[activeCategoryId].items.length"
-          class="org-chips-wrap"
-        >
-          <label
-            v-for="org in orgsByCategory[activeCategoryId].items"
-            :key="org.id"
-            class="org-chip"
-          >
-            <input
-              type="checkbox"
-              :checked="isOrgSelected(org.id)"
-              @change.stop="toggleOrg(org.id)"
-            />
-            <span class="org-chip-label">
-              {{ org.name || org.title || ('ID ' + org.id) }}
-            </span>
-          </label>
-        </div>
-
-        <div v-else class="org-empty">
-          Для этого типа пока нет организаций.
-        </div>
-      </div>
-
-      <!-- Описание -->
-      <div class="row">
-        <label>Описание / требуемые действия</label>
-        <textarea v-model.trim="form.description" rows="4" />
-      </div>
-
-      <!-- IOC -->
-      <div class="row">
-        <label>Индикаторы компрометации (IOC)</label>
-        <textarea
-          v-model.trim="form.indicators"
-          rows="3"
-          placeholder="URL, IP, домены, хэши…"
-        />
-      </div>
-
-      <!-- Файлы -->
-      <div class="row">
-        <label>Файлы</label>
-        <input type="file" multiple @change="onFiles" />
-        <div class="files" v-if="form.files.length">
-          <span v-for="(f, i) in form.files" :key="i" class="chip">
-            {{ f.name }}
-          </span>
-        </div>
-      </div>
-
-      <!-- Метаданные -->
-      <div class="grid meta-grid">
-        <div class="col">
-          <label>Кто добавил (устанавливает система)</label>
-          <input
-            v-model="form.created_by"
-            type="text"
-            disabled
-            placeholder="Определяется автоматически"
-          />
-        </div>
-        <div class="col">
-          <label>Кто изменил (устанавливает система)</label>
-          <input
-            v-model="form.updated_by"
-            type="text"
-            disabled
-            placeholder="Определяется автоматически"
-          />
-        </div>
-      </div>
-
-      <div class="actions">
-        <button type="submit" class="btn primary" :disabled="uploading">
-          {{ uploading ? 'Сохранение…' : 'Сохранить' }}
-        </button>
-      </div>
-    </form>
+    <!-- РЕЖИМ: ДОБАВЛЕНИЕ ОТВЕТНОГО ПИСЬМА -->
+    <div v-else>
+      <AddAnswerLetterForCertCBU @reply-created="onReplyCreated" />
+    </div>
   </div>
 </template>
 
@@ -401,6 +476,28 @@ export default {
   padding: 14px 14px 18px;
   box-sizing: border-box;
   border: 1px solid #e5e7eb;
+}
+
+/* ТАБЫ */
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.tab-btn {
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+  cursor: pointer;
+  font-size: 13px;
+  color: #374151;
+  transition: all 0.16s ease;
+}
+.tab-btn.active {
+  background: #22c55e;
+  color: #ffffff;
+  border-color: #16a34a;
 }
 
 /* уведомление */
@@ -462,9 +559,10 @@ label {
   color: #9ca3af;
 }
 
-/* inputs/textarea */
+/* inputs/textarea/select */
 input,
-textarea {
+textarea,
+select {
   border-radius: 7px;
   padding: 9px 12px;
   min-height: 38px;
@@ -481,26 +579,14 @@ textarea::placeholder {
   color: #9ca3af;
 }
 input:focus,
-textarea:focus {
+textarea:focus,
+select:focus {
   border-color: #22c55e;
   background-color: #ffffff;
   box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.15);
 }
 textarea {
   resize: vertical;
-}
-
-/* бейдж системы */
-.pill-system {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 8px 14px;
-  border-radius: 9px;
-  background: #f9fafb;
-  border: 1px solid #e5e7eb;
-  font-size: 12px;
-  font-weight: 600;
 }
 
 /* срок */

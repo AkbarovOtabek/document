@@ -1,13 +1,13 @@
-from django.urls import path, include
+# cert_documents/urls.py
 from rest_framework.routers import DefaultRouter
-
-from .views import CertDocumentViewSet
+from .views import CertLetterViewSet, CertLetterReplyViewSet
 
 router = DefaultRouter()
-# URL будет: /api/cert-documents/
-router.register(r'cert-documents', CertDocumentViewSet,
-                basename='cert-document')
+router.register("letters", CertLetterViewSet, basename="cert-letter")
+router.register(
+    "letter-replies",
+    CertLetterReplyViewSet,
+    basename="cert-letter-reply",
+)
 
-urlpatterns = [
-    path('', include(router.urls)),
-]
+urlpatterns = router.urls

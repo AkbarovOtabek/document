@@ -28,7 +28,8 @@ INSTALLED_APPS = [
     'staffUsers.apps.StaffusersConfig',
     'organizationsStaff',
     'external_letters',
-    'cert_documents'
+    'cert_documents',
+    'Statistics_site'
 ]
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": [
@@ -133,7 +134,7 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 
 SIMPLE_JWT = {
-    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=30),
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=180),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
     'AUTH_HEADER_TYPES': ('Bearer',),
     ' ALGORITHM': 'HS256',
