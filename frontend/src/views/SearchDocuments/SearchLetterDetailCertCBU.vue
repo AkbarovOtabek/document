@@ -137,7 +137,7 @@
               v-for="(org, idx) in group.orgs"
               :key="org.id || idx"
               class="org-chip"
-              :class="needReply ? statusClassForOrg(org) : ''"  <!-- 🔹 НЕ КРАСИМ, ЕСЛИ needReply = false -->
+              :class="needReply ? statusClassForOrg(org) : ''" 
               @click="openOrgModal(org)"
             >
               <div class="org-name">
@@ -507,6 +507,7 @@ export default {
         try {
           parsed = JSON.parse(raw)
         } catch (e) {
+          e.console.error('Ошибка парсинга units_tree организации', e)
           return [{
             id: 'raw',
             name: raw,

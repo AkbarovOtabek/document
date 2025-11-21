@@ -20,6 +20,7 @@ urlpatterns = [
          'external_letters'), namespace='external_letters')),
 
     path("api/cert-documents/", include("cert_documents.urls")),
+    path("api/statistics/", include("Statistics_site.urls")),
 ]
 if settings.DEBUG:
     urlpatterns += static(settings.MEDIA_URL,
