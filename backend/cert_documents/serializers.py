@@ -102,6 +102,7 @@ class CertLetterSerializer(serializers.ModelSerializer):
             "description",
             "has_deadline",
             "deadline",
+            "need_replies",
             "dest_organizations",
             "created_by",
             "updated_by",

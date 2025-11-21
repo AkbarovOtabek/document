@@ -39,6 +39,7 @@ export default {
         description: '',
         has_deadline: false,
         deadline: '',
+        need_replies: true,   // 🔹 новое поле: требуются ли ответные письма
         files: [],
         created_by: '',
         updated_by: '',
@@ -78,7 +79,6 @@ export default {
   methods: {
     // будет вызываться из компонента добавления ответа (если нужно)
     onReplyCreated() {
-      // тут можно показать тост, обновить список и т.п.
       console.log('Ответное письмо успешно добавлено')
     },
 
@@ -218,6 +218,8 @@ export default {
         fd.append('description', this.form.description || '')
         fd.append('has_deadline', this.form.has_deadline ? 'true' : 'false')
         fd.append('deadline', this.form.deadline || '')
+        // 🔹 новое поле — нужно ли требовать ответы
+        fd.append('need_replies', this.form.need_replies ? 'true' : 'false')
 
         this.selectedCategories.forEach(id =>
           fd.append('dest_categories', id)
@@ -246,11 +248,14 @@ export default {
           description: '',
           has_deadline: false,
           deadline: '',
+          need_replies: true,   // по умолчанию снова true
           files: [],
           created_by: '',
           updated_by: '',
         }
         this.selectedOrgIds = []
+        this.selectedCategories = []
+        this.activeCategoryId = null
       } catch (e) {
         console.error('Ошибка сохранения письма CERT-CBU', e)
         this.submitStatus = 'error'
@@ -370,6 +375,20 @@ export default {
               placeholder="Дата срока"
             />
           </div>
+          <div class="col">
+            <!-- просто пустая колонка, если нужно — можно использовать позже -->
+          </div>
+        </div>
+
+        <!-- Нужно ли требовать ответные письма -->
+        <div class="row">
+          <label class="deadline-label">
+            <input type="checkbox" v-model="form.need_replies" />
+            Требуются ответные письма от организаций
+          </label>
+          <small class="hint">
+            Если выключено, ответы организаций не будут учитываться в статусах и шкалах.
+          </small>
         </div>
 
         <!-- Типы организаций -->

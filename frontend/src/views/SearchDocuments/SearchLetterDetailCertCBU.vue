@@ -137,7 +137,7 @@
               v-for="(org, idx) in group.orgs"
               :key="org.id || idx"
               class="org-chip"
-              :class="statusClassForOrg(org)"
+              :class="needReply ? statusClassForOrg(org) : ''"  <!-- 🔹 НЕ КРАСИМ, ЕСЛИ needReply = false -->
               @click="openOrgModal(org)"
             >
               <div class="org-name">
@@ -145,14 +145,15 @@
               </div>
 
               <div class="org-status-text">
-                {{ statusTextForOrg(org) }}
+                {{ needReply ? statusTextForOrg(org) : 'Ответы по этому письму не требуются' }}
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div class="legend">
+      <!-- легенда показываем только если нужно отслеживать ответы -->
+      <div class="legend" v-if="needReply">
         <span class="legend-item legend-green">В срок</span>
         <span class="legend-item legend-red">Ответ с опозданием</span>
         <span class="legend-item legend-yellow">Ожидается ответ (до срока)</span>
@@ -161,6 +162,7 @@
     </div>
 
     <!-- МОДАЛЬНОЕ ОКНО ПО ОРГАНИЗАЦИИ -->
+    <!-- (оставляем как у тебя сейчас, только используем needReply в тексте статуса) -->
     <div v-if="showOrgModal && selectedOrg" class="modal-backdrop">
       <div class="modal-window">
         <div class="modal-head">
@@ -192,18 +194,15 @@
               <span class="modal-value">{{ curatorName }}</span>
             </div>
 
-            <!-- UNITS TREE -->
             <div class="modal-row" v-if="normalizedUnitTree && normalizedUnitTree.length">
               <span class="modal-label">Структура подразделений</span>
-              <div class="modal-value">
-                <div class="unit-tree">
-                  <UnitNode
-                    v-for="node in normalizedUnitTree"
-                    :key="node.id"
-                    :node="node"
-                    :level="0"
-                  />
-                </div>
+              <div class="modal-value unit-tree">
+                <UnitNode
+                  v-for="node in normalizedUnitTree"
+                  :key="node.id"
+                  :node="node"
+                  :level="0"
+                />
               </div>
             </div>
 
@@ -255,11 +254,16 @@
             <div class="modal-row">
               <span class="modal-label">Статус по письму</span>
               <span class="modal-value">
-                {{ currentOrgStatusText }}
+                <template v-if="needReply">
+                  {{ currentOrgStatusText }}
+                </template>
+                <template v-else>
+                  Ответы по этому письму не требуются
+                </template>
               </span>
             </div>
 
-            <div class="modal-row" v-if="currentOrgReply && currentOrgReply.received_date">
+            <div class="modal-row" v-if="needReply && currentOrgReply && currentOrgReply.received_date">
               <span class="modal-label">Дата получения ответа</span>
               <span class="modal-value">
                 {{ formatDate(currentOrgReply.received_date) }}
@@ -271,7 +275,7 @@
           <section class="modal-section">
             <div class="modal-section-title">Ответные письма организации</div>
 
-            <div v-if="orgReplies && orgReplies.length">
+            <div v-if="needReply && orgReplies && orgReplies.length">
               <div
                 v-for="reply in orgReplies"
                 :key="reply.id"
@@ -315,7 +319,12 @@
               </div>
             </div>
             <div v-else class="no-replies">
-              Ответов от этой организации нет.
+              <template v-if="needReply">
+                Ответов от этой организации нет.
+              </template>
+              <template v-else>
+                По данному письму ответы от организаций не требуются.
+              </template>
             </div>
           </section>
         </div>
@@ -335,10 +344,7 @@ import { API_BASE_URL } from '@/API'
 
 export default {
   name: 'SearchLetterDetailCertCBU',
-
-  components: {
-    UnitNode,
-  },
+  components: { UnitNode },
 
   props: {
     letter: {
@@ -349,7 +355,7 @@ export default {
 
   data() {
     return {
-      organizationsIndex: {}, // id -> объект организации
+      organizationsIndex: {},
       loadingOrgs: false,
 
       showOrgModal: false,
@@ -358,24 +364,27 @@ export default {
   },
 
   computed: {
-    /** Ответы по письму (ожидаем формат CertLetterReplySerializer или id-шники) */
-    repliesRaw() {
-      const l = this.letter
-      if (!l || !l.replies) return []
-
-      // если приходит массив id-шников, то тут можно будет отдельно подгружать;
-      // сейчас считаем, что уже приходят объекты
-      if (Array.isArray(l.replies)) {
-        return l.replies
-      }
-
-      return []
+    /* нужно ли отслеживать ответы */
+    needReply() {
+      const l = this.letter || {}
+      // поддержка разных возможных названий, если потом переименуешь
+      return (
+        l.need_replies ??
+        l.need_reply ??
+        l.track_responses ??
+        false
+      )
     },
 
-    /** replies сгруппированы по id организации */
+    repliesRaw() {
+      const l = this.letter
+      if (!l || !Array.isArray(l.replies)) return []
+      return l.replies
+    },
+
     repliesByOrgId() {
       const map = {}
-      this.repliesRaw.forEach((r) => {
+      this.repliesRaw.forEach(r => {
         const orgId =
           r.organization ||
           r.organization_id ||
@@ -388,12 +397,10 @@ export default {
       return map
     },
 
-    // исходный список адресатов (после подгрузки из API)
     recipients() {
       const l = this.letter
       if (!l) return []
 
-      // backend уже отдал объекты организаций
       if (
         Array.isArray(l.dest_organizations) &&
         l.dest_organizations.length &&
@@ -402,7 +409,6 @@ export default {
         return l.dest_organizations
       }
 
-      // массив id-шников
       if (Array.isArray(l.dest_organizations)) {
         return l.dest_organizations.map((id) => {
           return this.organizationsIndex[id] || { id }
@@ -412,7 +418,6 @@ export default {
       return []
     },
 
-    // сгруппировано по типу организации
     groupedRecipients() {
       const groupsMap = {}
 
@@ -437,25 +442,21 @@ export default {
       }))
     },
 
-    /** Ответы для выбранной организации */
     orgReplies() {
       if (!this.selectedOrg || !this.selectedOrg.id) return []
       return this.repliesByOrgId[this.selectedOrg.id] || []
     },
 
-    /** Основной ответ для выбранной организации */
     currentOrgReply() {
       if (!this.selectedOrg) return null
       return this.getReplyForOrg(this.selectedOrg)
     },
 
-    /** Статус по письму для выбранной организации (текст) */
     currentOrgStatusText() {
       if (!this.selectedOrg) return '—'
       return this.statusTextForOrg(this.selectedOrg)
     },
 
-    /** Куратор организации (разные варианты полей) */
     curatorName() {
       const org = this.selectedOrg
       if (!org) return null
@@ -489,12 +490,11 @@ export default {
       return null
     },
 
-    /** Приведённое к нормальному виду дерево подразделений для выбранной организации */
     normalizedUnitTree() {
       const org = this.selectedOrg
       if (!org) return []
 
-      let raw =
+      const raw =
         org.units_tree ||
         org.units_tree_display ||
         org.unit_path ||
@@ -502,37 +502,31 @@ export default {
 
       if (!raw) return []
 
-      // если пришла строка — пробуем распарсить как JSON
+      let parsed = raw
       if (typeof raw === 'string') {
         try {
-          raw = JSON.parse(raw)
+          parsed = JSON.parse(raw)
         } catch (e) {
-          console.error('Ошибка парсинга units_tree', e, raw)
-          return []
+          return [{
+            id: 'raw',
+            name: raw,
+            type: 'unit',
+            children: [],
+          }]
         }
       }
 
-      // если пришёл один объект, оборачиваем в массив
-      if (!Array.isArray(raw)) {
-        raw = [raw]
+      if (Array.isArray(parsed)) return parsed
+
+      if (parsed && typeof parsed === 'object') {
+        return [parsed]
       }
 
-      const normalizeNode = (n) => ({
-        id: n.id,
-        name: n.name || n.title || `Подразделение #${n.id}`,
-        type: n.type || n.unit_type || 'unit',
-        parent_id: n.parent_id ?? null,
-        children: Array.isArray(n.children)
-          ? n.children.map(normalizeNode)
-          : [],
-      })
-
-      return raw.map(normalizeNode)
+      return []
     },
   },
 
   watch: {
-    // как только письмо изменилось — подгружаем инфо по организациям
     letter: {
       immediate: true,
       handler(newVal) {
@@ -579,7 +573,6 @@ export default {
       }
     },
 
-    /** Найти "основной" ответ для конкретной организации (берём первый по дате) */
     getReplyForOrg(org) {
       const orgId = org.id
       if (!orgId) return null
@@ -587,15 +580,15 @@ export default {
       if (!list || !list.length) return null
 
       const sorted = [...list]
-        .filter((r) => r.received_date)
-        .sort(
-          (a, b) => new Date(a.received_date) - new Date(b.received_date)
-        )
+        .filter(r => r.received_date)
+        .sort((a, b) => new Date(a.received_date) - new Date(b.received_date))
       return sorted[0] || list[0]
     },
 
-    /** Класс цвета для организации */
     statusClassForOrg(org) {
+      // если по письму не нужно требовать ответы — вообще не красим
+      if (!this.needReply) return ''
+
       const reply = this.getReplyForOrg(org)
       const hasDeadline = !!this.letter.has_deadline && !!this.letter.deadline
 
@@ -630,8 +623,11 @@ export default {
       return 'org-grey'
     },
 
-    /** Текстовый статус под названием организации */
     statusTextForOrg(org) {
+      if (!this.needReply) {
+        return 'Ответы по этому письму не требуются'
+      }
+
       const reply = this.getReplyForOrg(org)
       const hasDeadline = !!this.letter.has_deadline && !!this.letter.deadline
 
@@ -703,6 +699,7 @@ export default {
   },
 }
 </script>
+
 
 <style scoped>
 .detail-wrapper {
